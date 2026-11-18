@@ -27,6 +27,13 @@ jobs:
       - name: Patch AndroidManifest
         run: python3 tool/patch_android.py
 
+      - name: Add native save-text activity
+        run: |
+          d=android/app/src/main/kotlin/com/egyptweb/quick_keep
+          mkdir -p "$d"
+          cp tool/SaveTextActivity.kt "$d/"
+          ls "$d"
+
       - name: Raise minSdk to 23 and compileSdk to 37
         run: |
           f=$(ls android/app/build.gradle* | head -1)
