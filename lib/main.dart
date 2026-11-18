@@ -82,8 +82,12 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   static const _prefsKey = 'items_v1';
+  static const _suggestKey = 'suggest_clip';
+  static const _lastClipKey = 'last_clip';
+  bool _suggest = true;
+  String? _lastClip;
   final List<Item> _items = [];
   final _search = TextEditingController();
   String _query = '';
@@ -95,7 +99,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkClipboard();
   }
 
   Future<void> _init() async {
@@ -103,12 +113,15 @@ class _HomePageState extends State<HomePage> {
     _imgDir = Directory(p.join(docs.path, 'images'));
     await _imgDir.create(recursive: true);
     final prefs = await SharedPreferences.getInstance();
+    _suggest = prefs.getBool(_suggestKey) ?? true;
+    _lastClip = prefs.getString(_lastClipKey);
     final raw = prefs.getString(_prefsKey);
     if (raw != null) {
       _items.addAll((jsonDecode(raw) as List)
           .map((e) => Item.fromJson(e as Map<String, dynamic>)));
     }
     setState(() => _ready = true);
+    _checkClipboard();
 
     // استقبال المشاركة من التطبيقات الأخرى
     final initial = await ReceiveSharingIntent.instance.getInitialMedia();
@@ -121,6 +134,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shareSub?.cancel();
     _search.dispose();
     super.dispose();
@@ -130,6 +144,58 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _prefsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
+  }
+
+  /// عند فتح التطبيق: إن وُجد نص جديد في الحافظة لم يُحفظ، نقترح حفظه.
+  Future<void> _checkClipboard() async {
+    if (!_suggest || !_ready || !mounted) return;
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty || text == _lastClip) return;
+    _lastClip = text;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastClipKey, text);
+    if (_items.any((e) => e.content == text)) return;
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        leading: Icon(_isLink(text) ? Icons.link : Icons.content_paste),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_isLink(text) ? 'رابط في الحافظة، تحفظه؟' : 'نص في الحافظة، تحفظه؟',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: messenger.hideCurrentMaterialBanner,
+            child: const Text('تجاهل'),
+          ),
+          FilledButton(
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+              _addText(text);
+              _toast('تم الحفظ');
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleSuggest() async {
+    setState(() => _suggest = !_suggest);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_suggestKey, _suggest);
+    if (!_suggest) ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+    _toast(_suggest ? 'اقتراح الحفظ مفعّل' : 'اقتراح الحفظ متوقف');
   }
 
   String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
@@ -347,6 +413,13 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('كويك كيب'),
         actions: [
+          IconButton(
+            tooltip: _suggest ? 'إيقاف اقتراح الحفظ' : 'تفعيل اقتراح الحفظ',
+            icon: Icon(_suggest
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_off_outlined),
+            onPressed: _toggleSuggest,
+          ),
           IconButton(
             tooltip: 'لصق وحفظ',
             icon: const Icon(Icons.content_paste_go),
