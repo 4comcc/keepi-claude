@@ -13,6 +13,9 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// يُستبدل أثناء البناء برقم البناء، لتتأكد أي نسخة مثبتة عندك.
+const kBuildLabel = 'dev';
+
 void main() => runApp(const QuickKeepApp());
 
 /// هوية كويك كيب: أخضر مائل للزمردي + كهرماني.
@@ -66,7 +69,7 @@ class QuickKeepApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'كويك كيب',
+      title: 'Keepi',
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],
@@ -465,18 +468,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'كويك كيب',
+                          'Keepi',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
+                            fontSize: 24,
+                            letterSpacing: 0.3,
                             fontWeight: FontWeight.bold,
                             height: 1.1,
                           ),
                         ),
                         Text(
                           _items.isEmpty
-                              ? 'احفظ أي شيء بسرعة'
-                              : '${_items.length} عنصر محفوظ',
+                              ? 'احفظ أي شيء بسرعة · $kBuildLabel'
+                              : '${_items.length} عنصر محفوظ · $kBuildLabel',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 12.5,
@@ -536,8 +540,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               const SizedBox(height: 12),
               SizedBox(
                 height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
+                child: Row(
                   children: [
                     _chip('الكل', Icons.apps_rounded, null),
                     _chip('نصوص', Icons.notes_rounded, ItemType.text),
@@ -555,32 +558,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _chip(String label, IconData icon, ItemType? t) {
     final sel = _filter == t;
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(end: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _filter = t),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: sel ? Colors.white : Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  size: 17, color: sel ? Brand.tealDeep : Colors.white),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: sel ? Brand.tealDeep : Colors.white,
-                  fontWeight: sel ? FontWeight.bold : FontWeight.w500,
-                  fontSize: 14,
-                ),
+    final fg = sel ? Brand.tealDeep : Colors.white;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: 6),
+        child: GestureDetector(
+          onTap: () => setState(() => _filter = t),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: sel ? Colors.white : Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: fg),
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: fg,
+                      fontWeight: sel ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -686,7 +694,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             Text(
               noItems
-                  ? 'انسخ نصاً أو رابطاً ثم افتح التطبيق، أو حدّد أي نص واختر «حفظ في كويك كيب»، أو شارك محتوى إليه مباشرة.'
+                  ? 'انسخ نصاً أو رابطاً ثم افتح التطبيق، أو حدّد أي نص واختر «Keepi» من قائمة التحديد، أو شارك محتوى إليه مباشرة.'
                   : 'جرّب كلمة بحث أخرى أو غيّر التصنيف.',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -899,7 +907,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               if (it.pinned)
                                 const Padding(
                                   padding: EdgeInsetsDirectional.only(end: 6),
-                                  child: Icon(Icons.bookmark_rounded,
+                                  child: Icon(Icons.push_pin_rounded,
                                       size: 18, color: Brand.amber),
                                 ),
                               Text(
@@ -925,8 +933,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 }),
                               action(
                                 it.pinned
-                                    ? Icons.bookmark_rounded
-                                    : Icons.bookmark_border_rounded,
+                                    ? Icons.push_pin_rounded
+                                    : Icons.push_pin_outlined,
                                 it.pinned ? 'إلغاء التثبيت' : 'تثبيت',
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,

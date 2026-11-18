@@ -13,14 +13,15 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * تظهر في قائمة تحديد النص (حفظ في كويك كيب)، تحفظ النص مباشرة
+ * تظهر في قائمة تحديد النص (Keepi)، تحفظ النص مباشرة
  * في نفس تخزين التطبيق دون فتح واجهته، ثم تغلق نفسها.
  */
 class SaveTextActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val text = intent?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()?.trim()
+        val text = (intent?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
+            ?: intent?.getCharSequenceExtra(Intent.EXTRA_TEXT))?.toString()?.trim()
         if (text.isNullOrEmpty()) {
             finish()
             return
@@ -29,7 +30,7 @@ class SaveTextActivity : Activity() {
             val added = save(text)
             Toast.makeText(
                 this,
-                if (added) "تم الحفظ في كويك كيب" else "محفوظ مسبقاً في كويك كيب",
+                if (added) "تم الحفظ في Keepi" else "محفوظ مسبقاً في Keepi",
                 Toast.LENGTH_SHORT
             ).show()
         } catch (e: Exception) {

@@ -22,7 +22,7 @@ filters = """
 # أول </activity> هو MainActivity
 s = s.replace("</activity>", filters + "        </activity>", 1)
 s = s.replace('android:launchMode="singleTop"', 'android:launchMode="singleTask"')
-s = re.sub(r'android:label="[^"]*"', 'android:label="كويك كيب"', s, count=1)
+s = re.sub(r'android:label="[^"]*"', 'android:label="Keepi"', s, count=1)
 
 # استعلامات https لـ url_launcher
 if "<queries>" in s:
@@ -35,7 +35,7 @@ save_activity = """
         <activity
             android:name=".SaveTextActivity"
             android:exported="true"
-            android:label="حفظ في كويك كيب"
+            android:label="Keepi"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity="">
@@ -45,6 +45,17 @@ save_activity = """
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <activity-alias
+            android:name=".QuickShareAlias"
+            android:targetActivity=".SaveTextActivity"
+            android:exported="true"
+            android:label="Keepi – حفظ سريع">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 """
 s = s.replace("</application>", save_activity + "    </application>", 1)
 

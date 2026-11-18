@@ -46,8 +46,17 @@ jobs:
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
+      - name: Stamp build number
+        run: sed -i "s/const kBuildLabel = 'dev';/const kBuildLabel = 'v${{ github.run_number }}';/" lib/main.dart
+
       - name: Build APK
         run: flutter build apk --release
+
+      - name: Inspect packaged manifest
+        run: |
+          AAPT2=$(ls ${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/*/aapt2 | tail -1)
+          $AAPT2 dump xmltree --file AndroidManifest.xml build/app/outputs/flutter-apk/app-release.apk \
+            | grep -nE "SaveTextActivity|QuickShareAlias|PROCESS_TEXT|android.intent.action.SEND|label|versionName" || true
 
       - name: Build AAB
         run: flutter build appbundle --release
