@@ -27,11 +27,12 @@ jobs:
       - name: Patch AndroidManifest
         run: python3 tool/patch_android.py
 
-      - name: Raise minSdk to 23
+      - name: Raise minSdk to 23 and compileSdk to 37
         run: |
           f=$(ls android/app/build.gradle* | head -1)
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/; s/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/' "$f"
-          grep -n "minSdk" "$f"
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 37/; s/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 37/' "$f"
+          grep -nE "minSdk|compileSdk" "$f"
 
       - run: flutter pub get
 
