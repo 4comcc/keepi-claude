@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
+import android.widget.Toast
 import android.service.quicksettings.TileService
 
 /** زر في لوحة الإعدادات السريعة: يحفظ ما في الحافظة بضغطة واحدة. */
@@ -18,6 +19,14 @@ class SaveClipTileService : TileService() {
     }
 
     override fun onClick() {
+        try {
+            launch()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Keepi: تعذّر التشغيل من هذا الزر، استخدم اختصار الأيقونة", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun launch() {
         val intent = Intent(this, ClipboardSaveActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Build.VERSION.SDK_INT >= 34) {

@@ -2,4 +2,6 @@
 <resources>
     <string name="keepi_shortcut_short">احفظ الحافظة</string>
     <string name="keepi_shortcut_long">احفظ ما في الحافظة في Keepi</string>
+    <string name="keepi_shot_short">احفظ لقطة الشاشة</string>
+    <string name="keepi_shot_long">احفظ آخر لقطة شاشة في Keepi</string>
 </resources>

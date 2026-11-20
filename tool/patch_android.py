@@ -56,9 +56,22 @@ save_activity = """
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity-alias>
 """
 clip_parts = """
+        <activity
+            android:name=".ScreenshotSaveActivity"
+            android:exported="true"
+            android:label="Keepi – لقطة الشاشة"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
         <activity
             android:name=".ClipboardSaveActivity"
             android:exported="true"
@@ -79,6 +92,12 @@ clip_parts = """
         </service>
 """
 s = s.replace("</application>", save_activity + clip_parts + "    </application>", 1)
+
+perms = """    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+"""
+s = s.replace("<application", perms + "    <application", 1)
 
 path.write_text(s, encoding="utf-8")
 print("patched")
