@@ -60,7 +60,7 @@ jobs:
         run: sed -i "s/const kBuildLabel = 'dev';/const kBuildLabel = 'v${{ github.run_number }}';/" lib/main.dart
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
 
       - name: Inspect packaged manifest
         run: |
@@ -69,7 +69,7 @@ jobs:
             | grep -nE "SaveTextActivity|QuickShareAlias|PROCESS_TEXT|android.intent.action.SEND|label|versionName" || true
 
       - name: Build AAB
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
 
       - name: Show signing certificate
         run: |
