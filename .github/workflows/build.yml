@@ -34,12 +34,16 @@ jobs:
           cp tool/SaveTextActivity.kt "$d/"
           ls "$d"
 
+      - name: Fixed signing key
+        run: python3 tool/patch_signing.py
+
       - name: Raise minSdk to 23 and compileSdk to 37
         run: |
           f=$(ls android/app/build.gradle* | head -1)
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/; s/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/' "$f"
           sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 37/; s/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 37/' "$f"
           grep -nE "minSdk|compileSdk" "$f"
+          grep -n "signingConfig" "$f"
 
       - run: flutter pub get
 
@@ -60,6 +64,11 @@ jobs:
 
       - name: Build AAB
         run: flutter build appbundle --release
+
+      - name: Show signing certificate
+        run: |
+          APKSIGNER=$(ls ${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/*/apksigner | tail -1)
+          $APKSIGNER verify --print-certs build/app/outputs/flutter-apk/app-release.apk | head -3 || true
 
       - uses: actions/upload-artifact@v4
         with:
