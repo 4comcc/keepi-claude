@@ -10,7 +10,7 @@ import android.provider.MediaStore
 import android.widget.Toast
 
 /**
- * تحفظ آخر لقطة شاشة (خلال آخر ساعة) في Keepi دون فتح التطبيق.
+ * تحفظ آخر لقطة شاشة (خلال آخر 24 ساعة) في Keepi دون فتح التطبيق.
  * تُشغَّل من اختصار أيقونة التطبيق. تحتاج إذن قراءة الصور مرة واحدة.
  */
 class ScreenshotSaveActivity : Activity() {
@@ -50,17 +50,17 @@ class ScreenshotSaveActivity : Activity() {
     private fun saveLatest(): String {
         val base = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
-        val (sel, args) = if (Build.VERSION.SDK_INT >= 29)
-            Pair("${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?", arrayOf("%Screenshots%"))
-        else
-            Pair("${MediaStore.Images.Media.DATA} LIKE ?", arrayOf("%Screenshots%"))
-
+        val dataCol = MediaStore.Images.Media.DATA
+        val sel = "(" + (if (Build.VERSION.SDK_INT >= 29) "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ? OR " else "") +
+            "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ? OR $dataCol LIKE ?)"
+        val args = if (Build.VERSION.SDK_INT >= 29) arrayOf("%creenshot%", "%creenshot%", "%creenshot%")
+        else arrayOf("%creenshot%", "%creenshot%")
         contentResolver.query(base, projection, sel, args, "${MediaStore.Images.Media.DATE_ADDED} DESC")?.use { c ->
             if (!c.moveToFirst()) return "لا توجد لقطات شاشة"
             val id = c.getLong(0)
             val addedSec = c.getLong(1)
-            if (System.currentTimeMillis() / 1000 - addedSec > 3600) {
-                return "لا توجد لقطة شاشة حديثة (خلال آخر ساعة)"
+            if (System.currentTimeMillis() / 1000 - addedSec > 86400) {
+                return "لا توجد لقطة شاشة حديثة (خلال آخر 24 ساعة)"
             }
             val prefs = getSharedPreferences("keepi_native", MODE_PRIVATE)
             if (prefs.getLong("last_shot_id", -1) == id) return "هذه اللقطة محفوظة مسبقاً"
