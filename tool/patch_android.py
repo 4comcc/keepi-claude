@@ -45,6 +45,15 @@ save_activity = """
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- يجعل التطبيق مرئياً لتطبيقات مثل Keep و Gmail (رؤية الحزم في أندرويد 11+)
+                 حتى يظهر خيار Keepi في قائمة التحديد داخلها. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+            </intent-filter>
         </activity>
         <activity-alias
             android:name=".QuickShareAlias"

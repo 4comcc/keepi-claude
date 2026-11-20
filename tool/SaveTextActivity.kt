@@ -23,7 +23,8 @@ class SaveTextActivity : Activity() {
 
     private fun saveText(): String {
         val text = (intent?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
-            ?: intent?.getCharSequenceExtra(Intent.EXTRA_TEXT))?.toString()?.trim()
+            ?: intent?.getCharSequenceExtra(Intent.EXTRA_TEXT)
+            ?: intent?.dataString)?.toString()?.trim()
         if (text.isNullOrEmpty()) return "لا يوجد نص"
         return if (QuickSave.save(this, text)) "تم الحفظ في Keepi" else "محفوظ مسبقاً في Keepi"
     }
