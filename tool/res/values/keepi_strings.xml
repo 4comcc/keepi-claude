@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keepi_shortcut_short">احفظ الحافظة</string>
+    <string name="keepi_shortcut_long">احفظ ما في الحافظة في Keepi</string>
+</resources>

@@ -1,0 +1,13 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="save_clipboard"
+        android:enabled="true"
+        android:icon="@drawable/ic_keepi_shortcut"
+        android:shortcutShortLabel="@string/keepi_shortcut_short"
+        android:shortcutLongLabel="@string/keepi_shortcut_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.egyptweb.quick_keep"
+            android:targetClass="com.egyptweb.quick_keep.ClipboardSaveActivity" />
+    </shortcut>
+</shortcuts>

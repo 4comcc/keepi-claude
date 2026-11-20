@@ -20,7 +20,7 @@ filters = """
             </intent-filter>
 """
 # أول </activity> هو MainActivity
-s = s.replace("</activity>", filters + "        </activity>", 1)
+s = s.replace("</activity>", filters + '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n        </activity>', 1)
 s = s.replace('android:launchMode="singleTop"', 'android:launchMode="singleTask"')
 s = re.sub(r'android:label="[^"]*"', 'android:label="Keepi"', s, count=1)
 
@@ -35,6 +35,7 @@ save_activity = """
         <activity
             android:name=".SaveTextActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher"
             android:label="Keepi"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -57,7 +58,27 @@ save_activity = """
             </intent-filter>
         </activity-alias>
 """
-s = s.replace("</application>", save_activity + "    </application>", 1)
+clip_parts = """
+        <activity
+            android:name=".ClipboardSaveActivity"
+            android:exported="true"
+            android:label="Keepi – حفظ الحافظة"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+        <service
+            android:name=".SaveClipTileService"
+            android:exported="true"
+            android:label="Keepi"
+            android:icon="@drawable/ic_keepi_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+"""
+s = s.replace("</application>", save_activity + clip_parts + "    </application>", 1)
 
 path.write_text(s, encoding="utf-8")
 print("patched")

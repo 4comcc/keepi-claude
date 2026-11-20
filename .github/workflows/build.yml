@@ -34,8 +34,11 @@ jobs:
         run: |
           d=android/app/src/main/kotlin/com/egyptweb/quick_keep
           mkdir -p "$d"
-          cp tool/SaveTextActivity.kt "$d/"
+          cp tool/*.kt "$d/"
           ls "$d"
+          mkdir -p android/app/src/main/res
+          cp -r tool/res/. android/app/src/main/res/
+          ls -R android/app/src/main/res | grep -E "keepi|shortcuts"
 
       - name: Fixed signing key
         run: python3 tool/patch_signing.py
