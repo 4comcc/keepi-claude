@@ -27,8 +27,8 @@ jobs:
       - name: Generate platform folders
         run: flutter create --org com.egyptweb --project-name quick_keep --platforms=android,ios .
 
-      - name: Patch AndroidManifest
-        run: python3 tool/patch_android.py
+      - name: Keep pristine manifest
+        run: cp android/app/src/main/AndroidManifest.xml /tmp/AndroidManifest.orig.xml
 
       - name: Add native save-text activity
         run: |
@@ -59,14 +59,25 @@ jobs:
       - name: Stamp build number
         run: sed -i "s/const kBuildLabel = 'dev';/const kBuildLabel = 'v${{ github.run_number }}';/" lib/main.dart
 
-      - name: Build APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
+      - name: Build APK variants (base, lite, full)
+        run: |
+          NUM=${{ github.run_number }}
+          mkdir -p out
+          for v in base lite full; do
+            cp /tmp/AndroidManifest.orig.xml android/app/src/main/AndroidManifest.xml
+            KEEPI_VARIANT=$v python3 tool/patch_android.py
+            flutter build apk --release --build-number=$NUM --build-name=1.0.$NUM
+            cp build/app/outputs/flutter-apk/app-release.apk out/Keepi-$v.apk
+          done
+          # الأخير (full) هو الناتج الرئيسي ويبقى في build/app/outputs
 
       - name: Inspect packaged manifest
         run: |
           AAPT2=$(ls ${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/*/aapt2 | tail -1)
-          $AAPT2 dump xmltree --file AndroidManifest.xml build/app/outputs/flutter-apk/app-release.apk \
-            | grep -nE "SaveTextActivity|QuickShareAlias|PROCESS_TEXT|android.intent.action.SEND|label|versionName" || true
+          for v in base lite full; do
+            echo "== $v =="
+            $AAPT2 dump xmltree --file AndroidManifest.xml out/Keepi-$v.apk | grep -cE "E: (activity|service|activity-alias|uses-permission)" || true
+          done
 
       - name: Build AAB
         run: flutter build appbundle --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
@@ -90,9 +101,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk Keepi.apk
+          cp out/Keepi-full.apk Keepi.apk
           gh release delete latest --cleanup-tag -y || true
-          gh release create latest Keepi.apk \
+          gh release create latest Keepi.apk out/Keepi-base.apk out/Keepi-lite.apk \
             --title "Keepi v${{ github.run_number }}" \
             --notes "Build #${{ github.run_number }}" \
             --target ${{ github.sha }}

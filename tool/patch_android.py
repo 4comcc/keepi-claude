@@ -1,5 +1,16 @@
-"""يعدّل AndroidManifest.xml الذي ولّده flutter create: المشاركة، الاسم، الاستعلامات."""
-import re, sys, pathlib
+"""يعدّل AndroidManifest.xml الذي ولّده flutter create.
+
+المتغير KEEPI_VARIANT:
+  base  = المشاركة + قائمة التحديد فقط (مثل الإصدار 8 الذي ثبّت على الهاتف)
+  lite  = base + اختصارات الأيقونة + حفظ الحافظة/لقطة الشاشة + الأذونات (بدون زر الإعدادات السريعة)
+  full  = lite + زر الإعدادات السريعة
+"""
+import os, re, sys, pathlib
+
+VARIANT = os.environ.get("KEEPI_VARIANT", "full")
+assert VARIANT in ("base", "lite", "full"), VARIANT
+extras = VARIANT in ("lite", "full")
+tile = VARIANT == "full"
 
 path = pathlib.Path("android/app/src/main/AndroidManifest.xml")
 s = path.read_text(encoding="utf-8")
@@ -19,19 +30,30 @@ filters = """
                 <data android:mimeType="image/*" />
             </intent-filter>
 """
+shortcuts_meta = '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n' if extras else ""
 # أول </activity> هو MainActivity
-s = s.replace("</activity>", filters + '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n        </activity>', 1)
+s = s.replace("</activity>", filters + shortcuts_meta + "        </activity>", 1)
 s = s.replace('android:launchMode="singleTop"', 'android:launchMode="singleTask"')
 s = re.sub(r'android:label="[^"]*"', 'android:label="Keepi"', s, count=1)
 
 # استعلامات https لـ url_launcher
+q = '\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>'
 if "<queries>" in s:
-    s = s.replace("<queries>", '<queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>', 1)
+    s = s.replace("<queries>", "<queries>" + q, 1)
 else:
-    s = s.replace("</manifest>", '    <queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW" />\n            <data android:scheme="https" />\n        </intent>\n    </queries>\n</manifest>')
+    s = s.replace("</manifest>", "    <queries>" + q + "\n    </queries>\n</manifest>")
 
-# نشاط "حفظ في كويك كيب" في قائمة تحديد النص
-save_activity = """
+# يجعل التطبيق مرئياً لتطبيقات مثل Keep و Gmail (رؤية الحزم في أندرويد 11+)
+view_filter = """
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+            </intent-filter>""" if extras else ""
+
+save_activity = f"""
         <activity
             android:name=".SaveTextActivity"
             android:exported="true"
@@ -44,16 +66,7 @@ save_activity = """
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
-            </intent-filter>
-            <!-- يجعل التطبيق مرئياً لتطبيقات مثل Keep و Gmail (رؤية الحزم في أندرويد 11+)
-                 حتى يظهر خيار Keepi في قائمة التحديد داخلها. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:scheme="http" />
-            </intent-filter>
+            </intent-filter>{view_filter}
         </activity>
         <activity-alias
             android:name=".QuickShareAlias"
@@ -72,6 +85,7 @@ save_activity = """
             </intent-filter>
         </activity-alias>
 """
+
 clip_parts = """
         <activity
             android:name=".ScreenshotSaveActivity"
@@ -89,6 +103,9 @@ clip_parts = """
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:taskAffinity="" />
+""" if extras else ""
+
+tile_service = """
         <service
             android:name=".SaveClipTileService"
             android:exported="true"
@@ -99,14 +116,16 @@ clip_parts = """
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
-"""
-s = s.replace("</application>", save_activity + clip_parts + "    </application>", 1)
+""" if tile else ""
 
-perms = """    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+s = s.replace("</application>", save_activity + clip_parts + tile_service + "    </application>", 1)
+
+if extras:
+    perms = """    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
 """
-s = s.replace("<application", perms + "    <application", 1)
+    s = s.replace("<application", perms + "    <application", 1)
 
 path.write_text(s, encoding="utf-8")
-print("patched")
+print("patched", VARIANT)
