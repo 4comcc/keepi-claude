@@ -95,6 +95,7 @@ class Item {
   bool pinned;
   bool fav;
   String? ws;
+  List<String> tags;
 
   Item({
     required this.id,
@@ -104,7 +105,8 @@ class Item {
     this.pinned = false,
     this.fav = false,
     this.ws,
-  });
+    List<String>? tags,
+  }) : tags = tags ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -114,6 +116,7 @@ class Item {
         'pinned': pinned,
         'fav': fav,
         'ws': ws,
+        'tags': tags,
       };
 
   factory Item.fromJson(Map<String, dynamic> j) => Item(
@@ -124,6 +127,7 @@ class Item {
         pinned: j['pinned'] ?? false,
         fav: j['fav'] ?? false,
         ws: j['ws'] as String?,
+        tags: ((j['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
       );
 }
 
@@ -375,6 +379,63 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {});
   }
 
+  Future<void> _editTags(Item it) async {
+    final n = await _askName('الوسوم (افصل بينها بفاصلة)', it.tags.join('، '));
+    if (n == null) return;
+    it.tags = n
+        .split(RegExp(r'[,،\n]'))
+        .map((e) => e.trim().replaceFirst('#', ''))
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .take(8)
+        .toList();
+    await _save();
+    setState(() {});
+  }
+
+  Future<void> _exportBackup() async {
+    final data = {
+      'app': 'keepi',
+      'version': 1,
+      'workspaces': _workspaces.map((e) => e.toJson()).toList(),
+      'items': _items
+          .where((e) => e.type != ItemType.image)
+          .map((e) => e.toJson())
+          .toList(),
+    };
+    await Clipboard.setData(
+        ClipboardData(text: const JsonEncoder.withIndent('  ').convert(data)));
+    _toast('تم نسخ النسخة الاحتياطية (النصوص والروابط) إلى الحافظة');
+  }
+
+  Future<void> _importBackup() async {
+    final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+    try {
+      final m = jsonDecode(clip) as Map<String, dynamic>;
+      if (m['app'] != 'keepi') throw 'x';
+      final ids = _items.map((e) => e.id).toSet();
+      final wids = _workspaces.map((e) => e.id).toSet();
+      var added = 0;
+      for (final w in (m['workspaces'] as List? ?? [])) {
+        final ws = Workspace.fromJson(w as Map<String, dynamic>);
+        if (wids.add(ws.id)) _workspaces.add(ws);
+      }
+      for (final e in (m['items'] as List? ?? [])) {
+        final it = Item.fromJson(e as Map<String, dynamic>);
+        if (it.type != ItemType.image && ids.add(it.id)) {
+          _items.add(it);
+          added++;
+        }
+      }
+      await _save();
+      await _saveWs();
+      setState(() {});
+      _toast('تمت استعادة $added عنصر');
+    } catch (_) {
+      _toast('انسخ أولاً نص النسخة الاحتياطية ثم أعد المحاولة');
+    }
+  }
+
   Future<void> _saveWs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -582,8 +643,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (_favOnly && !e.fav) return false;
       if (_wsFilter != null && e.ws != _wsFilter) return false;
       if (_query.isNotEmpty) {
+        final q = _query.toLowerCase().replaceFirst('#', '');
+        if (e.tags.any((t) => t.toLowerCase().contains(q))) return true;
         if (e.type == ItemType.image) return false;
-        return e.content.toLowerCase().contains(_query.toLowerCase());
+        return e.content.toLowerCase().contains(q);
       }
       return true;
     }).toList();
@@ -737,6 +800,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     color: Colors.white,
                     icon: const Icon(Icons.content_paste_go_rounded),
                     onPressed: _pasteAndSave,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'المزيد',
+                    iconColor: Colors.white,
+                    onSelected: (v) =>
+                        v == 'export' ? _exportBackup() : _importBackup(),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                          value: 'export', child: Text('نسخ احتياطي (نسخ إلى الحافظة)')),
+                      PopupMenuItem(
+                          value: 'import', child: Text('استعادة من الحافظة')),
+                    ],
                   ),
                 ],
               ),
@@ -1179,6 +1254,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 10),
                           body,
+                          if (it.tags.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                for (final t in it.tags)
+                                  GestureDetector(
+                                    onTap: () => setState(() {
+                                      _search.text = '#$t';
+                                      _query = '#$t';
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Brand.tealMid
+                                            .withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text('#$t',
+                                          style: const TextStyle(fontSize: 12)),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 2),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
@@ -1205,6 +1307,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,
                               ),
+                              action(Icons.sell_outlined, 'وسوم',
+                                  () => _editTags(it)),
                               action(Icons.folder_open_rounded, 'نقل',
                                   () => _moveItem(it)),
                               action(Icons.delete_outline_rounded, 'حذف',
