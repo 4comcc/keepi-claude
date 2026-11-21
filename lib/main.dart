@@ -1144,9 +1144,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       onPressed: busy ? null : () => go(true),
                       child: Text(tr('إنشاء حساب جديد')),
                     ),
-                    const SizedBox(height: 4),
-                    Text(tr('الاستخدام دون حساب متاح دائماً، وعناصرك تبقى على هاتفك.'),
-                        style: TextStyle(fontSize: 12)),
+                    const SizedBox(height: 8),
                   ],
           ),
         );
