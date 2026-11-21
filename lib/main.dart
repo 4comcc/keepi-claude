@@ -95,7 +95,7 @@ class QuickKeepApp extends StatelessWidget {
   }
 }
 
-enum ItemType { text, link, image }
+enum ItemType { text, link, image, video }
 
 class Item {
   final String id;
@@ -120,6 +120,31 @@ class Item {
     List<String>? tags,
   })  : tags = tags ?? [],
         updatedAt = updatedAt ?? createdAt;
+
+  static final _urlRe = RegExp(r'https?://[^\s]+');
+  static final _videoRes = <RegExp>[
+    RegExp(r'https?://(?:[\w-]+\.)*(?:youtube\.com|youtu\.be|tiktok\.com|vimeo\.com|dailymotion\.com|twitch\.tv|fb\.watch)(?:[/?#]\S*)?', caseSensitive: false),
+    RegExp(r'https?://(?:[\w-]+\.)*instagram\.com/(?:reels?|tv|p)/\S*', caseSensitive: false),
+    RegExp(r'https?://(?:[\w-]+\.)*facebook\.com/(?:watch|reel|[^\s/]+/videos)\S*', caseSensitive: false),
+  ];
+
+  /// رابط الفيديو إن كان المحتوى يتضمن رابط منصة فيديو (يُشتق ولا يُخزَّن).
+  String? get videoUrl {
+    if (type == ItemType.image) return null;
+    for (final m in _urlRe.allMatches(content)) {
+      final u = m.group(0)!;
+      if (_videoRes.any((r) => r.hasMatch(u))) return u;
+    }
+    return null;
+  }
+
+  /// الكابشن = النص المصاحب للرابط.
+  String get caption {
+    final u = videoUrl;
+    return u == null ? '' : content.replaceFirst(u, '').trim();
+  }
+
+  ItemType get kind => videoUrl != null ? ItemType.video : type;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -216,6 +241,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     L.locale.addListener(_onLang);
+    _authSub = SyncService.authChanges.listen((_) async {
+      if (SyncService.signedIn) await _adoptOwner();
+      if (mounted) setState(() {});
+      if (SyncService.signedIn) _sync();
+    });
     _init();
   }
 
@@ -283,6 +313,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _authSub?.cancel();
     L.locale.removeListener(_onLang);
     WidgetsBinding.instance.removeObserver(this);
     _shareSub?.cancel();
@@ -496,8 +527,106 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // ───────────── الحساب والمزامنة ─────────────
   Timer? _syncTimer;
+  StreamSubscription? _authSub;
   bool _syncing = false;
   String _syncState = '';
+
+  /// المحفوظات مرتبطة بحساب واحد على الجهاز: عند دخول حساب مختلف نمسح النسخة المحلية.
+  Future<void> _adoptOwner() async {
+    final uid = SyncService.uid;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final owner = prefs.getString('owner_uid');
+    if (owner != null && owner != uid) {
+      _items.clear();
+      _workspaces.clear();
+      _wsFilter = null;
+      await prefs.remove(_prefsKey);
+      await prefs.remove(_wsKey);
+      await prefs.remove('tomb_v1');
+    }
+    await prefs.setString('owner_uid', uid);
+    await _loadItems();
+  }
+
+  bool get _locked => SyncService.available && !SyncService.signedIn;
+
+  Widget _lockScreen() {
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Brand.tealLight, Brand.tealDeep],
+              ),
+              borderRadius:
+                  BorderRadius.vertical(bottom: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 6, 14),
+                child: Row(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset('assets/icon/icon.png',
+                        width: 34, height: 34),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text('Keepi',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    color: Colors.white,
+                    tooltip: tr('اللغة'),
+                    icon: const Icon(Icons.language_rounded),
+                    onPressed: _langDialog,
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_outline_rounded,
+                        size: 56, color: Brand.tealMid),
+                    const SizedBox(height: 16),
+                    Text(tr('سجّل الدخول لعرض محفوظاتك'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 19, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(
+                        tr('محفوظاتك مخفية حتى تسجّل الدخول، وتختفي بعد تسجيل الخروج.'),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: _accountSheet,
+                      icon: const Icon(Icons.login_rounded),
+                      label: Text(tr('تسجيل الدخول')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _scheduleSync() {
     if (!SyncService.signedIn) return;
@@ -999,7 +1128,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   List<Item> get _visible {
     final list = _items.where((e) {
-      if (_filter != null && e.type != _filter) return false;
+      if (_filter != null &&
+          (_filter == ItemType.video ? e.videoUrl == null : e.type != _filter)) {
+        return false;
+      }
       if (_favOnly && !e.fav) return false;
       if (_wsFilter != null && e.ws != _wsFilter) return false;
       if (_query.isNotEmpty) {
@@ -1018,7 +1150,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _open(Item it) async {
-    if (it.type == ItemType.link) {
+    final v = it.videoUrl;
+    if (v != null) {
+      await launchUrl(Uri.parse(v), mode: LaunchMode.externalApplication);
+    } else if (it.type == ItemType.link) {
       await launchUrl(Uri.parse(it.content),
           mode: LaunchMode.externalApplication);
     } else if (it.type == ItemType.image) {
@@ -1051,6 +1186,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_locked) return _lockScreen();
     final items = _visible;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -1266,6 +1402,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       _chip(tr('الكل'), Icons.apps_rounded, null),
                       _chip(tr('نصوص'), Icons.notes_rounded, ItemType.text),
                       _chip(tr('روابط'), Icons.link_rounded, ItemType.link),
+                      _chip(tr('فيديو'), Icons.play_circle_outline_rounded,
+                          ItemType.video),
                       _chip(tr('صور'), Icons.image_outlined, ItemType.image),
                     ],
                   ),
@@ -1457,6 +1595,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return _dark ? const Color(0xFF5FD3B3) : Brand.tealLight;
       case ItemType.image:
         return Brand.amber;
+      case ItemType.video:
+        return const Color(0xFFE5484D);
       case ItemType.text:
         return _dark ? const Color(0xFF8FB8AC) : Brand.tealMid;
     }
@@ -1468,6 +1608,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return tr('رابط');
       case ItemType.image:
         return tr('صورة');
+      case ItemType.video:
+        return tr('فيديو');
       case ItemType.text:
         return tr('نص');
     }
@@ -1479,6 +1621,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return Icons.link_rounded;
       case ItemType.image:
         return Icons.image_outlined;
+      case ItemType.video:
+        return Icons.play_circle_outline_rounded;
       case ItemType.text:
         return Icons.notes_rounded;
     }
@@ -1504,10 +1648,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _card(Item it) {
     final cs = Theme.of(context).colorScheme;
-    final accent = _accent(it.type);
+    final kind = it.kind;
+    final accent = _accent(kind);
 
     final Widget body;
-    switch (it.type) {
+    switch (kind) {
       case ItemType.image:
         body = ClipRRect(
           borderRadius: BorderRadius.circular(14),
@@ -1517,6 +1662,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             width: double.infinity,
             fit: BoxFit.cover,
           ),
+        );
+      case ItemType.video:
+        final cap = it.caption;
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (cap.isNotEmpty)
+              Text(cap,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15.5, height: 1.45)),
+            if (cap.isNotEmpty) const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.play_circle_fill_rounded, size: 18, color: accent),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  _host(it.videoUrl!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+              ),
+            ]),
+          ],
         );
       case ItemType.link:
         body = Column(
@@ -1620,7 +1794,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(_typeIcon(it.type),
+                                    Icon(_typeIcon(kind),
                                         size: 15,
                                         color: it.type == ItemType.image
                                             ? (_dark
@@ -1629,7 +1803,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             : accent),
                                     const SizedBox(width: 5),
                                     Text(
-                                      _typeLabel(it.type),
+                                      _typeLabel(kind),
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,

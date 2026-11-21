@@ -19,6 +19,11 @@ class SyncService {
     }
   }
 
+  static bool get available => _ok;
+  static String? get uid => _ok ? _c.auth.currentUser?.id : null;
+  static Stream<void> get authChanges =>
+      _ok ? _c.auth.onAuthStateChange.map((_) {}) : const Stream.empty();
+
   static bool get signedIn => _ok && _c.auth.currentSession != null;
   static String? get email => _ok ? _c.auth.currentUser?.email : null;
 
