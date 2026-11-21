@@ -39,6 +39,19 @@ class SyncService {
     return tr('تعذّر الاتصال، تحقق من الإنترنت');
   }
 
+  /// الدخول عبر جوجل (متصفح ثم عودة للتطبيق). يعيد null إذا بدأ بنجاح.
+  static Future<String?> signInGoogle() async {
+    try {
+      await _c.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'io.supabase.keepi://login-callback/',
+      );
+      return null;
+    } catch (e) {
+      return _msg(e);
+    }
+  }
+
   /// يعيد null عند النجاح، أو رسالة خطأ.
   static Future<String?> signIn(String email, String pw) async {
     try {

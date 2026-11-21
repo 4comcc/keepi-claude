@@ -22,6 +22,7 @@ const kBuildLabel = 'dev';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await L.load();
+  await ThemeCtl.load();
   await SyncService.init();
   runApp(const QuickKeepApp());
 }
@@ -76,7 +77,9 @@ class QuickKeepApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Locale>(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeCtl.mode,
+      builder: (context, tm, _) => ValueListenableBuilder<Locale>(
       valueListenable: L.locale,
       builder: (context, loc, _) => MaterialApp(
       title: 'Keepi',
@@ -90,8 +93,9 @@ class QuickKeepApp extends StatelessWidget {
       ],
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
+      themeMode: tm,
       home: const HomePage(),
-    ));
+    )));
   }
 }
 
@@ -107,6 +111,22 @@ class Item {
   bool fav;
   String? ws;
   List<String> tags;
+
+  static const _np = '\u200bnote:';
+  String get note {
+    for (final t in tags) {
+      if (t.startsWith(_np)) return t.substring(_np.length);
+    }
+    return '';
+  }
+
+  set note(String v) {
+    tags.removeWhere((t) => t.startsWith(_np));
+    if (v.trim().isNotEmpty) tags.add('$_np${v.trim()}');
+  }
+
+  List<String> get shownTags =>
+      tags.where((t) => !t.startsWith(_np)).toList();
 
   Item({
     required this.id,
@@ -640,6 +660,212 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {});
   }
 
+  Future<void> _settingsSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) {
+        final cs = Theme.of(ctx).colorScheme;
+        Widget tile(IconData i, String t, VoidCallback f, {String? sub}) =>
+            ListTile(
+              leading: Icon(i, color: cs.primary),
+              title: Text(t),
+              subtitle: sub == null ? null : Text(sub),
+              onTap: () {
+                Navigator.pop(ctx);
+                f();
+              },
+            );
+        Widget label(String t) => Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Text(t,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface.withValues(alpha: 0.55))),
+            );
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 6, 0),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text(tr('الإعدادات'),
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w800)),
+                    ),
+                    IconButton(
+                      tooltip: tr('إغلاق'),
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ]),
+                ),
+                const Divider(height: 8),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      label(tr('الحساب')),
+                      tile(
+                          Icons.cloud_sync_outlined,
+                          tr('الحساب والمزامنة'),
+                          _accountSheet,
+                          sub: SyncService.email),
+                      label(tr('المظهر واللغة')),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 6),
+                        child: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment(
+                                value: ThemeMode.system,
+                                icon: const Icon(Icons.brightness_auto_rounded),
+                                label: Text(tr('تلقائي'))),
+                            ButtonSegment(
+                                value: ThemeMode.light,
+                                icon: const Icon(Icons.light_mode_rounded),
+                                label: Text(tr('فاتح'))),
+                            ButtonSegment(
+                                value: ThemeMode.dark,
+                                icon: const Icon(Icons.dark_mode_rounded),
+                                label: Text(tr('داكن'))),
+                          ],
+                          selected: {ThemeCtl.mode.value},
+                          onSelectionChanged: (v) async {
+                            await ThemeCtl.set(v.first);
+                            setS(() {});
+                          },
+                        ),
+                      ),
+                      tile(Icons.language_rounded, tr('اللغة'), _langDialog,
+                          sub: L.names[L.code]),
+                      label(tr('الحفظ')),
+                      SwitchListTile(
+                        secondary:
+                            Icon(Icons.lightbulb_outline_rounded, color: cs.primary),
+                        title: Text(tr('اقتراح الحفظ')),
+                        value: _suggest,
+                        onChanged: (_) async {
+                          await _toggleSuggest();
+                          setS(() {});
+                        },
+                      ),
+                      tile(Icons.delete_outline_rounded, tr('سلة المهملات'),
+                          _trashSheet),
+                      label(tr('البيانات')),
+                      tile(Icons.upload_rounded, tr('نسخ احتياطي (نسخ إلى الحافظة)'),
+                          _exportBackup),
+                      tile(Icons.download_rounded, tr('استعادة من الحافظة'),
+                          _importBackup),
+                      label(tr('المساعدة')),
+                      tile(Icons.help_outline_rounded, tr('مساعدة وطريقة الاستخدام'),
+                          _helpSheet),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _helpSheet() async {
+    final items = <List<String>>[
+      ['📥', tr('الحفظ السريع'), tr('شارك أي نص أو رابط أو صورة من أي تطبيق إلى Keepi، أو حدّد النص واختر Keepi من القائمة، أو اضغط زر اللصق في الأعلى لحفظ ما نسخته.')],
+      ['➕', tr('الإضافة اليدوية'), tr('زر «إضافة» في الأسفل لكتابة نص أو إضافة صورة.')],
+      ['🎬', tr('الفيديو'), tr('روابط يوتيوب وتيك توك وإنستجرام وفيسبوك تظهر في تصنيف الفيديو. أيقونة الملاحظة تتيح كتابة الكابشن.')],
+      ['📝', tr('الملاحظات والوسوم'), tr('على كل بطاقة: نسخ، مفضلة، تثبيت، ملاحظة، وسوم، نقل لمساحة، وحذف.')],
+      ['🗂️', tr('المساحات'), tr('أنشئ مساحات (مثل عمل، دراسة) من زر المجلد، ثم انقل العناصر إليها.')],
+      ['🔍', tr('البحث'), tr('ابحث في النص والوسوم والملاحظات. اضغط على وسم لعرض كل ما يحمله.')],
+      ['🗑️', tr('سلة المهملات'), tr('المحذوفات تبقى 30 يوماً ويمكن استعادتها من الإعدادات.')],
+      ['☁️', tr('المزامنة'), tr('سجّل الدخول لمزامنة عناصرك (حتى 500 عنصر مجاناً). الصور تبقى على هاتفك.')],
+    ];
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 6, 0),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(tr('مساعدة وطريقة الاستخدام'),
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w800)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              const Divider(height: 8),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  children: [
+                    for (final h in items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(h[0], style: const TextStyle(fontSize: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(h[1],
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15)),
+                                  const SizedBox(height: 2),
+                                  Text(h[2],
+                                      style: const TextStyle(
+                                          fontSize: 13.5, height: 1.5)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editNote(Item it) async {
+    final n = await _askName(tr('ملاحظة'), it.note, true);
+    if (n == null) return;
+    it.note = n;
+    it.updatedAt = DateTime.now().toUtc();
+    await _save();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _editCaption(Item it) async {
     final url = it.videoUrl;
     if (url == null) return;
@@ -703,8 +929,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _editTags(Item it) async {
-    final n = await _askName(tr('الوسوم (افصل بينها بفاصلة)'), it.tags.join('، '));
+    final n = await _askName(tr('الوسوم (افصل بينها بفاصلة)'), it.shownTags.join('، '));
     if (n == null) return;
+    final keepNote = it.note;
     it.tags = n
         .split(RegExp(r'[,،\n]'))
         .map((e) => e.trim().replaceFirst('#', ''))
@@ -712,6 +939,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         .toSet()
         .take(8)
         .toList();
+    it.note = keepNote;
     it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
@@ -1144,6 +1372,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       onPressed: busy ? null : () => go(true),
                       child: Text(tr('إنشاء حساب جديد')),
                     ),
+                    const SizedBox(height: 4),
+                    OutlinedButton.icon(
+                      onPressed: busy
+                          ? null
+                          : () async {
+                              final r = await SyncService.signInGoogle();
+                              if (r != null) {
+                                setS(() => err = r);
+                              } else if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
+                            },
+                      icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
+                      label: Text(tr('المتابعة بحساب جوجل')),
+                    ),
                     const SizedBox(height: 8),
                   ],
           ),
@@ -1536,40 +1779,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           icon: const Icon(Icons.content_paste_go_rounded),
           onPressed: _pasteAndSave,
         ),
-        PopupMenuButton<String>(
-          tooltip: tr('المزيد'),
-          iconColor: white,
-          onSelected: (v) {
-            switch (v) {
-              case 'account':
-                _accountSheet();
-              case 'lang':
-                _langDialog();
-              case 'suggest':
-                _toggleSuggest();
-              case 'trash':
-                _trashSheet();
-              case 'export':
-                _exportBackup();
-              default:
-                _importBackup();
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(value: 'account', child: Text(tr('الحساب والمزامنة'))),
-            PopupMenuItem(
-                value: 'lang',
-                child: Text('${tr('اللغة')}: ${L.names[L.code]}')),
-            PopupMenuItem(
-                value: 'suggest',
-                child: Text(_suggest
-                    ? tr('إيقاف اقتراح الحفظ')
-                    : tr('تفعيل اقتراح الحفظ'))),
-            PopupMenuItem(value: 'trash', child: Text(tr('سلة المهملات'))),
-            PopupMenuItem(
-                value: 'export', child: Text(tr('نسخ احتياطي (نسخ إلى الحافظة)'))),
-            PopupMenuItem(value: 'import', child: Text(tr('استعادة من الحافظة'))),
-          ],
+        IconButton(
+          tooltip: tr('الإعدادات'),
+          color: white,
+          icon: const Icon(Icons.settings_rounded),
+          onPressed: _settingsSheet,
         ),
       ],
     );
@@ -2114,13 +2328,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 10),
                           body,
-                          if (it.tags.isNotEmpty) ...[
+                          if (it.type != ItemType.video &&
+                              it.note.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Brand.amber.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.edit_note_rounded, size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(it.note,
+                                        style: const TextStyle(fontSize: 13.5)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (it.shownTags.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Wrap(
                               spacing: 6,
                               runSpacing: 4,
                               children: [
-                                for (final t in it.tags)
+                                for (final t in it.shownTags)
                                   GestureDetector(
                                     onTap: () => setState(() {
                                       _search.text = '#$t';
@@ -2167,9 +2404,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,
                               ),
-                              if (kind == ItemType.video)
-                                action(Icons.edit_note_rounded, tr('تعديل الكابشن'),
-                                    () => _editCaption(it)),
+                              action(
+                                  Icons.edit_note_rounded,
+                                  kind == ItemType.video
+                                      ? tr('تعديل الكابشن')
+                                      : tr('ملاحظة'),
+                                  () => kind == ItemType.video
+                                      ? _editCaption(it)
+                                      : _editNote(it)),
                               action(Icons.sell_outlined, tr('وسوم'),
                                   () => _editTags(it)),
                               action(Icons.folder_open_rounded, tr('نقل'),

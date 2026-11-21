@@ -28,6 +28,22 @@ class L {
   }
 }
 
+class ThemeCtl {
+  static final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.system);
+  static Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getString('theme');
+    mode.value = ThemeMode.values.firstWhere((m) => m.name == v,
+        orElse: () => ThemeMode.system);
+  }
+
+  static Future<void> set(ThemeMode m) async {
+    mode.value = m;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme', m.name);
+  }
+}
+
 /// يعيد ترجمة النص العربي حسب اللغة الحالية.
 String tr(String ar) {
   if (L.isAr) return ar;
@@ -35,6 +51,35 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'الإعدادات': 'Settings',
+  'إغلاق': 'Close',
+  'الحساب': 'Account',
+  'المظهر واللغة': 'Appearance & language',
+  'تلقائي': 'Auto',
+  'فاتح': 'Light',
+  'داكن': 'Dark',
+  'اقتراح الحفظ': 'Save suggestions',
+  'الحفظ': 'Saving',
+  'البيانات': 'Data',
+  'المساعدة': 'Help',
+  'مساعدة وطريقة الاستخدام': 'Help & how to use',
+  'ملاحظة': 'Note',
+  'المتابعة بحساب جوجل': 'Continue with Google',
+  'الحفظ السريع': 'Quick save',
+  'شارك أي نص أو رابط أو صورة من أي تطبيق إلى Keepi، أو حدّد النص واختر Keepi من القائمة، أو اضغط زر اللصق في الأعلى لحفظ ما نسخته.': 'Share any text, link or image from any app to Keepi, or select text and choose Keepi from the menu, or tap the paste button at the top to save what you copied.',
+  'الإضافة اليدوية': 'Manual add',
+  'زر «إضافة» في الأسفل لكتابة نص أو إضافة صورة.': 'Use the Add button at the bottom to type text or add an image.',
+  'الفيديو': 'Video',
+  'روابط يوتيوب وتيك توك وإنستجرام وفيسبوك تظهر في تصنيف الفيديو. أيقونة الملاحظة تتيح كتابة الكابشن.': 'YouTube, TikTok, Instagram and Facebook links appear under Videos. The note icon lets you write the caption.',
+  'الملاحظات والوسوم': 'Notes & tags',
+  'على كل بطاقة: نسخ، مفضلة، تثبيت، ملاحظة، وسوم، نقل لمساحة، وحذف.': 'Every card has: copy, favorite, pin, note, tags, move to workspace, and delete.',
+  'المساحات': 'Workspaces',
+  'أنشئ مساحات (مثل عمل، دراسة) من زر المجلد، ثم انقل العناصر إليها.': 'Create workspaces (like Work, Study) with the folder button, then move items into them.',
+  'البحث': 'Search',
+  'ابحث في النص والوسوم والملاحظات. اضغط على وسم لعرض كل ما يحمله.': 'Search text, tags and notes. Tap a tag to see everything with it.',
+  'المحذوفات تبقى 30 يوماً ويمكن استعادتها من الإعدادات.': 'Deleted items stay for 30 days and can be restored from Settings.',
+  'المزامنة': 'Sync',
+  'سجّل الدخول لمزامنة عناصرك (حتى 500 عنصر مجاناً). الصور تبقى على هاتفك.': 'Sign in to sync your items (up to 500 free). Images stay on your phone.',
   'اقتراح الحفظ مفعّل': 'Save suggestions on',
   'اقتراح الحفظ متوقف': 'Save suggestions off',
   'تم الحفظ': 'Saved',

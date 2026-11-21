@@ -29,6 +29,12 @@ filters = """
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="io.supabase.keepi" android:host="login-callback" />
+            </intent-filter>
 """
 shortcuts_meta = '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n' if extras else ""
 # أول </activity> هو MainActivity
