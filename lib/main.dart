@@ -93,6 +93,8 @@ class Item {
   final String content; // نص، رابط، أو اسم ملف الصورة
   final DateTime createdAt;
   bool pinned;
+  bool fav;
+  String? ws;
 
   Item({
     required this.id,
@@ -100,6 +102,8 @@ class Item {
     required this.content,
     required this.createdAt,
     this.pinned = false,
+    this.fav = false,
+    this.ws,
   });
 
   Map<String, dynamic> toJson() => {
@@ -108,6 +112,8 @@ class Item {
         'content': content,
         'createdAt': createdAt.toIso8601String(),
         'pinned': pinned,
+        'fav': fav,
+        'ws': ws,
       };
 
   factory Item.fromJson(Map<String, dynamic> j) => Item(
@@ -116,7 +122,18 @@ class Item {
         content: j['content'],
         createdAt: DateTime.parse(j['createdAt']),
         pinned: j['pinned'] ?? false,
+        fav: j['fav'] ?? false,
+        ws: j['ws'] as String?,
       );
+}
+
+class Workspace {
+  final String id;
+  String name;
+  Workspace(this.id, this.name);
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  factory Workspace.fromJson(Map<String, dynamic> j) =>
+      Workspace(j['id'], j['name']);
 }
 
 class HomePage extends StatefulWidget {
@@ -134,6 +151,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _search = TextEditingController();
   String _query = '';
   ItemType? _filter;
+  final List<Workspace> _workspaces = [];
+  String? _wsFilter;
+  bool _favOnly = false;
+  static const _wsKey = 'workspaces_v1';
   late Directory _imgDir;
   StreamSubscription? _shareSub;
   bool _ready = false;
@@ -181,6 +202,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _loadItems() async {
     final prefs = await SharedPreferences.getInstance();
+    try {
+      final w = prefs.getString(_wsKey);
+      if (w != null) {
+        _workspaces
+          ..clear()
+          ..addAll((jsonDecode(w) as List)
+              .map((e) => Workspace.fromJson(e as Map<String, dynamic>)));
+      }
+    } catch (_) {}
     await prefs.reload();
     final raw = prefs.getString(_prefsKey);
     final loaded = <Item>[];
@@ -251,6 +281,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         type: _isLink(t) ? ItemType.link : ItemType.text,
         content: t,
         createdAt: DateTime.now(),
+        ws: _wsFilter,
       ),
     );
     await _save();
@@ -267,6 +298,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         type: ItemType.image,
         content: name,
         createdAt: DateTime.now(),
+        ws: _wsFilter,
       ),
     );
     await _save();
@@ -337,6 +369,205 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {});
   }
 
+  Future<void> _toggleFav(Item it) async {
+    it.fav = !it.fav;
+    await _save();
+    setState(() {});
+  }
+
+  Future<void> _saveWs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
+  }
+
+  String? _wsName(String? id) {
+    for (final w in _workspaces) {
+      if (w.id == id) return w.name;
+    }
+    return null;
+  }
+
+  Future<String?> _askName(String title, [String initial = '']) {
+    final c = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          maxLength: 24,
+          decoration: const InputDecoration(hintText: 'الاسم'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim()),
+              child: const Text('حفظ')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addWorkspace() async {
+    final n = await _askName('مساحة عمل جديدة');
+    if (n == null || n.isEmpty) return;
+    final w = Workspace(_newId(), n);
+    _workspaces.add(w);
+    await _saveWs();
+    setState(() {
+      _wsFilter = w.id;
+      _favOnly = false;
+    });
+  }
+
+  Future<void> _wsMenu(Workspace w) async {
+    final a = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('إعادة تسمية'),
+              onTap: () => Navigator.pop(ctx, 'rename')),
+          ListTile(
+              leading: const Icon(Icons.folder_delete_outlined),
+              title: const Text('حذف المساحة (تبقى عناصرها)'),
+              onTap: () => Navigator.pop(ctx, 'delete')),
+        ]),
+      ),
+    );
+    if (a == 'rename') {
+      final n = await _askName('إعادة تسمية', w.name);
+      if (n != null && n.isNotEmpty) {
+        w.name = n;
+        await _saveWs();
+        setState(() {});
+      }
+    } else if (a == 'delete') {
+      for (final e in _items) {
+        if (e.ws == w.id) e.ws = null;
+      }
+      _workspaces.remove(w);
+      if (_wsFilter == w.id) _wsFilter = null;
+      await _save();
+      await _saveWs();
+      setState(() {});
+    }
+  }
+
+  Future<void> _moveItem(Item it) async {
+    final res = await showModalBottomSheet<List<String?>>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(
+              title: Text('نقل إلى مساحة عمل',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
+          ListTile(
+              leading: Icon(it.ws == null
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off),
+              title: const Text('بدون مساحة'),
+              onTap: () => Navigator.pop(ctx, [null])),
+          for (final w in _workspaces)
+            ListTile(
+                leading: Icon(it.ws == w.id
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off),
+                title: Text(w.name),
+                onTap: () => Navigator.pop(ctx, [w.id])),
+        ]),
+      ),
+    );
+    if (res == null) return;
+    it.ws = res.first;
+    await _save();
+    setState(() {});
+  }
+
+  Widget _wsBar() {
+    final cs = Theme.of(context).colorScheme;
+    Widget chip(String label, bool sel, VoidCallback onTap,
+        {VoidCallback? onLong, IconData? icon}) {
+      return Padding(
+        padding: const EdgeInsetsDirectional.only(end: 8),
+        child: GestureDetector(
+          onTap: onTap,
+          onLongPress: onLong,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: sel
+                  ? Brand.tealMid
+                  : cs.onSurface.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (icon != null) ...[
+                Icon(icon,
+                    size: 16, color: sel ? Colors.white : Brand.amber),
+                const SizedBox(width: 5),
+              ],
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: sel ? FontWeight.bold : FontWeight.w500,
+                      color: sel ? Colors.white : cs.onSurface)),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+        children: [
+          chip('الكل', _wsFilter == null && !_favOnly,
+              () => setState(() {
+                    _wsFilter = null;
+                    _favOnly = false;
+                  })),
+          chip('المفضلة', _favOnly,
+              () => setState(() {
+                    _favOnly = !_favOnly;
+                    _wsFilter = null;
+                  }),
+              icon: Icons.star_rounded),
+          for (final w in _workspaces)
+            chip(w.name, _wsFilter == w.id,
+                () => setState(() {
+                      _wsFilter = _wsFilter == w.id ? null : w.id;
+                      _favOnly = false;
+                    }),
+                onLong: () => _wsMenu(w),
+                icon: Icons.folder_rounded),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: GestureDetector(
+              onTap: _addWorkspace,
+              child: Container(
+                width: 36,
+                decoration: const BoxDecoration(
+                    color: Brand.amber, shape: BoxShape.circle),
+                child: const Icon(Icons.create_new_folder_rounded,
+                    size: 19, color: Brand.onAmber),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _toast(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -348,6 +579,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<Item> get _visible {
     final list = _items.where((e) {
       if (_filter != null && e.type != _filter) return false;
+      if (_favOnly && !e.fav) return false;
+      if (_wsFilter != null && e.ws != _wsFilter) return false;
       if (_query.isNotEmpty) {
         if (e.type == ItemType.image) return false;
         return e.content.toLowerCase().contains(_query.toLowerCase());
@@ -405,6 +638,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         body: Column(
           children: [
             _header(),
+            _wsBar(),
             AnimatedSize(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOut,
@@ -903,7 +1137,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   ],
                                 ),
                               ),
+                              if (_wsName(it.ws) != null) ...[
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: cs.onSurface
+                                          .withValues(alpha: 0.07),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(_wsName(it.ws)!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 11.5)),
+                                  ),
+                                ),
+                              ],
                               const Spacer(),
+                              if (it.fav)
+                                const Padding(
+                                  padding: EdgeInsetsDirectional.only(end: 6),
+                                  child: Icon(Icons.star_rounded,
+                                      size: 18, color: Brand.amber),
+                                ),
                               if (it.pinned)
                                 const Padding(
                                   padding: EdgeInsetsDirectional.only(end: 6),
@@ -932,6 +1190,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   _toast('تم النسخ');
                                 }),
                               action(
+                                it.fav
+                                    ? Icons.star_rounded
+                                    : Icons.star_outline_rounded,
+                                it.fav ? 'إزالة من المفضلة' : 'مفضلة',
+                                () => _toggleFav(it),
+                                color: it.fav ? Brand.amber : null,
+                              ),
+                              action(
                                 it.pinned
                                     ? Icons.push_pin_rounded
                                     : Icons.push_pin_outlined,
@@ -939,6 +1205,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,
                               ),
+                              action(Icons.folder_open_rounded, 'نقل',
+                                  () => _moveItem(it)),
                               action(Icons.delete_outline_rounded, 'حذف',
                                   () => _deleteWithUndo(it)),
                             ],
