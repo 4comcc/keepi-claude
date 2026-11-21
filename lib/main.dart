@@ -100,7 +100,7 @@ enum ItemType { text, link, image, video }
 class Item {
   final String id;
   final ItemType type;
-  final String content; // نص، رابط، أو اسم ملف الصورة
+  String content; // نص، رابط، أو اسم ملف الصورة
   final DateTime createdAt;
   DateTime updatedAt;
   bool pinned;
@@ -125,7 +125,7 @@ class Item {
   static final _videoRes = <RegExp>[
     RegExp(r'https?://(?:[\w-]+\.)*(?:youtube\.com|youtu\.be|tiktok\.com|vimeo\.com|dailymotion\.com|twitch\.tv|fb\.watch)(?:[/?#]\S*)?', caseSensitive: false),
     RegExp(r'https?://(?:[\w-]+\.)*instagram\.com/(?:reels?|tv|p)/\S*', caseSensitive: false),
-    RegExp(r'https?://(?:[\w-]+\.)*facebook\.com/(?:watch|reel|[^\s/]+/videos)\S*', caseSensitive: false),
+    RegExp(r'https?://(?:[\w-]+\.)*facebook\.com/(?:watch|reel|share/[vr]|[^\s/]+/videos)\S*', caseSensitive: false),
   ];
 
   /// رابط الفيديو إن كان المحتوى يتضمن رابط منصة فيديو (يُشتق ولا يُخزَّن).
@@ -274,6 +274,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _loadItems();
     setState(() => _ready = true);
     _sync();
+    _fillCaptions();
     _checkClipboard();
 
     // استقبال المشاركة من التطبيقات الأخرى
@@ -375,6 +376,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     await _save();
     if (mounted) setState(() {});
+    _fillCaptions();
   }
 
   Future<void> _addImageFile(String path) async {
@@ -465,6 +467,68 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
+  }
+
+  Future<void> _editCaption(Item it) async {
+    final url = it.videoUrl;
+    if (url == null) return;
+    final n = await _askName(tr('تعديل الكابشن'), it.caption, true);
+    if (n == null) return;
+    it.content = n.isEmpty ? url : '$n $url';
+    it.updatedAt = DateTime.now().toUtc();
+    await _save();
+    if (mounted) setState(() {});
+  }
+
+  /// يجلب عنوان الفيديو تلقائياً من oEmbed الرسمي (يوتيوب/تيك توك/فيميو).
+  /// إنستغرام وفيسبوك لا يرسلان الكابشن ولا يتيحان جلبه دون حساب مطوّر.
+  Future<String?> _fetchTitle(String url) async {
+    final h = (Uri.tryParse(url)?.host ?? '').toLowerCase();
+    String? api;
+    final u = Uri.encodeComponent(url);
+    if (h.contains('youtube.com') || h.contains('youtu.be')) {
+      api = 'https://www.youtube.com/oembed?format=json&url=$u';
+    } else if (h.contains('tiktok.com')) {
+      api = 'https://www.tiktok.com/oembed?url=$u';
+    } else if (h.contains('vimeo.com')) {
+      api = 'https://vimeo.com/api/oembed.json?url=$u';
+    }
+    if (api == null) return null;
+    try {
+      final c = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+      final req = await c.getUrl(Uri.parse(api));
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      final body = await res.transform(utf8.decoder).join();
+      final t = (jsonDecode(body) as Map)['title'];
+      return t is String && t.trim().isNotEmpty ? t.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _filling = false;
+  Future<void> _fillCaptions() async {
+    if (_filling) return;
+    _filling = true;
+    try {
+      var changed = false;
+      for (final it in List.of(_items).take(40)) {
+        final u = it.videoUrl;
+        if (u == null || it.caption.isNotEmpty) continue;
+        final t = await _fetchTitle(u);
+        if (t == null) continue;
+        it.content = '$t $u';
+        it.updatedAt = DateTime.now().toUtc();
+        changed = true;
+      }
+      if (changed) {
+        await _save();
+        if (mounted) setState(() {});
+      }
+    } finally {
+      _filling = false;
+    }
   }
 
   Future<void> _editTags(Item it) async {
@@ -932,7 +996,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return null;
   }
 
-  Future<String?> _askName(String title, [String initial = '']) {
+  Future<String?> _askName(String title,
+      [String initial = '', bool long = false]) {
     final c = TextEditingController(text: initial);
     return showDialog<String>(
       context: context,
@@ -941,9 +1006,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         content: TextField(
           controller: c,
           autofocus: true,
-          maxLength: 24,
-          decoration: InputDecoration(hintText: tr('الاسم')),
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          maxLength: long ? 300 : 24,
+          maxLines: long ? 4 : 1,
+          minLines: 1,
+          decoration: InputDecoration(hintText: long ? '' : tr('الاسم')),
+          onSubmitted: long ? null : (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
           TextButton(
@@ -1129,7 +1196,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<Item> get _visible {
     final list = _items.where((e) {
       if (_filter != null &&
-          (_filter == ItemType.video ? e.videoUrl == null : e.type != _filter)) {
+          (_filter == ItemType.video
+              ? e.videoUrl == null
+              : (e.type != _filter || e.videoUrl != null))) {
         return false;
       }
       if (_favOnly && !e.fav) return false;
@@ -1690,6 +1759,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
             ]),
+            if (cap.isEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                it.videoUrl!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.start,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: cs.onSurface.withValues(alpha: 0.6)),
+              ),
+            ],
           ],
         );
       case ItemType.link:
@@ -1912,6 +1994,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,
                               ),
+                              if (kind == ItemType.video)
+                                action(Icons.edit_note_rounded, tr('تعديل الكابشن'),
+                                    () => _editCaption(it)),
                               action(Icons.sell_outlined, tr('وسوم'),
                                   () => _editTags(it)),
                               action(Icons.folder_open_rounded, tr('نقل'),

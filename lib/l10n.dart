@@ -97,6 +97,7 @@ const _en = <String, String>{
   'ابحث في محفوظاتك...': 'Search your items...',
   'نصوص': 'Texts',
   'فيديو': 'Videos',
+  'تعديل الكابشن': 'Edit caption',
   'سجّل الدخول لعرض محفوظاتك': 'Sign in to view your items',
   'محفوظاتك مخفية حتى تسجّل الدخول، وتختفي بعد تسجيل الخروج.': 'Your items stay hidden until you sign in, and hide again after you sign out.',
   'تسجيل الدخول': 'Sign in',
