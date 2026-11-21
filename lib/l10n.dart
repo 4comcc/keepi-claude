@@ -98,6 +98,13 @@ const _en = <String, String>{
   'نصوص': 'Texts',
   'فيديو': 'Videos',
   'تعديل الكابشن': 'Edit caption',
+  'سلة المهملات': 'Trash',
+  'إفراغ السلة': 'Empty trash',
+  'تُحذف العناصر نهائياً بعد 30 يوماً': 'Items are permanently deleted after 30 days',
+  'السلة فارغة': 'Trash is empty',
+  'استعادة': 'Restore',
+  'حذف نهائي': 'Delete forever',
+
   'سجّل الدخول لعرض محفوظاتك': 'Sign in to view your items',
   'محفوظاتك مخفية حتى تسجّل الدخول، وتختفي بعد تسجيل الخروج.': 'Your items stay hidden until you sign in, and hide again after you sign out.',
   'تسجيل الدخول': 'Sign in',

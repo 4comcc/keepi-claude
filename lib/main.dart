@@ -272,6 +272,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _suggest = prefs.getBool(_suggestKey) ?? true;
     _lastClip = prefs.getString(_lastClipKey);
     await _loadItems();
+    _trashPurge();
     setState(() => _ready = true);
     _sync();
     _fillCaptions();
@@ -432,6 +433,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _items.removeAt(idx);
     setState(() {}); // متزامن: مطلوب من Dismissible
     _addTomb(it.id).then((_) => _save());
+    await _trashAdd(it);
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     final ctrl = messenger.showSnackBar(
@@ -442,17 +444,186 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onPressed: () async {
             _items.insert(math.min(idx, _items.length), it);
             await _removeTomb(it.id);
+            await _trashRemove(it.id);
             await _save();
             if (mounted) setState(() {});
           },
         ),
       ),
     );
-    final reason = await ctrl.closed;
-    if (reason != SnackBarClosedReason.action && it.type == ItemType.image) {
-      final f = File(p.join(_imgDir.path, it.content));
-      if (await f.exists()) await f.delete();
+    await ctrl.closed;
+  }
+
+  static const _trashKey = 'trash_v1';
+  static const _trashDays = 30;
+
+  Future<List<Map<String, dynamic>>> _trashLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    final out = <Map<String, dynamic>>[];
+    for (final r in prefs.getStringList(_trashKey) ?? <String>[]) {
+      try {
+        out.add(jsonDecode(r) as Map<String, dynamic>);
+      } catch (_) {}
     }
+    return out;
+  }
+
+  Future<void> _trashSave(List<Map<String, dynamic>> l) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_trashKey, l.map(jsonEncode).toList());
+  }
+
+  Future<void> _trashAdd(Item it) async {
+    final l = await _trashLoad();
+    l.removeWhere((e) => e['id'] == it.id);
+    l.insert(0, {...it.toJson(), 'deletedAt': DateTime.now().toIso8601String()});
+    await _trashSave(l);
+  }
+
+  Future<void> _trashRemove(String id) async {
+    final l = await _trashLoad();
+    l.removeWhere((e) => e['id'] == id);
+    await _trashSave(l);
+  }
+
+  Future<void> _trashFile(Map<String, dynamic> m) async {
+    if (m['type'] != 'image') return;
+    final f = File(p.join(_imgDir.path, m['content'] as String));
+    if (await f.exists()) await f.delete();
+  }
+
+  /// يحذف نهائياً ما مضى عليه أكثر من 30 يوماً.
+  Future<void> _trashPurge() async {
+    final l = await _trashLoad();
+    final cut = DateTime.now().subtract(const Duration(days: _trashDays));
+    final keep = <Map<String, dynamic>>[];
+    for (final m in l) {
+      final d = DateTime.tryParse('${m['deletedAt']}');
+      if (d != null && d.isBefore(cut)) {
+        await _trashFile(m);
+      } else {
+        keep.add(m);
+      }
+    }
+    if (keep.length != l.length) await _trashSave(keep);
+  }
+
+  Future<void> _trashSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _trashLoad(),
+          builder: (ctx, snap) {
+            final l = snap.data ?? [];
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(tr('سلة المهملات'),
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w700)),
+                        ),
+                        if (l.isNotEmpty)
+                          TextButton(
+                            onPressed: () async {
+                              for (final m in l) {
+                                await _trashFile(m);
+                              }
+                              await _trashSave([]);
+                              setS(() {});
+                            },
+                            child: Text(tr('إفراغ السلة')),
+                          ),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          tr('تُحذف العناصر نهائياً بعد 30 يوماً'),
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(ctx)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.6)),
+                        ),
+                      ),
+                    ),
+                    if (l.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(tr('السلة فارغة')),
+                      )
+                    else
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final m in l)
+                              ListTile(
+                                leading: Icon(m['type'] == 'image'
+                                    ? Icons.image_outlined
+                                    : Icons.notes_rounded),
+                                title: Text(
+                                  m['type'] == 'image'
+                                      ? tr('صورة')
+                                      : '${m['content']}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: tr('استعادة'),
+                                      icon: const Icon(Icons.restore_rounded),
+                                      onPressed: () async {
+                                        final it = Item.fromJson(m);
+                                        it.updatedAt = DateTime.now().toUtc();
+                                        _items.insert(0, it);
+                                        await _removeTomb(it.id);
+                                        await _trashRemove(it.id);
+                                        await _save();
+                                        if (mounted) this.setState(() {});
+                                        setS(() {});
+                                      },
+                                    ),
+                                    IconButton(
+                                      tooltip: tr('حذف نهائي'),
+                                      icon: const Icon(
+                                          Icons.delete_forever_rounded),
+                                      onPressed: () async {
+                                        await _trashFile(m);
+                                        await _trashRemove('${m['id']}');
+                                        setS(() {});
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      }),
+    );
   }
 
   Future<void> _togglePin(Item it) async {
@@ -608,6 +779,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await prefs.remove(_prefsKey);
       await prefs.remove(_wsKey);
       await prefs.remove('tomb_v1');
+      await prefs.remove(_trashKey);
     }
     await prefs.setString('owner_uid', uid);
     await _loadItems();
@@ -1377,6 +1549,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _langDialog();
               case 'suggest':
                 _toggleSuggest();
+              case 'trash':
+                _trashSheet();
               case 'export':
                 _exportBackup();
               default:
@@ -1393,6 +1567,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 child: Text(_suggest
                     ? tr('إيقاف اقتراح الحفظ')
                     : tr('تفعيل اقتراح الحفظ'))),
+            PopupMenuItem(value: 'trash', child: Text(tr('سلة المهملات'))),
             PopupMenuItem(
                 value: 'export', child: Text(tr('نسخ احتياطي (نسخ إلى الحافظة)'))),
             PopupMenuItem(value: 'import', child: Text(tr('استعادة من الحافظة'))),
