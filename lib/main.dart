@@ -13,6 +13,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'l10n.dart';
 import 'sync.dart';
 
 /// يُستبدل أثناء البناء برقم البناء، لتتأكد أي نسخة مثبتة عندك.
@@ -20,6 +21,7 @@ const kBuildLabel = 'dev';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await L.load();
   await SyncService.init();
   runApp(const QuickKeepApp());
 }
@@ -74,10 +76,12 @@ class QuickKeepApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ValueListenableBuilder<Locale>(
+      valueListenable: L.locale,
+      builder: (context, loc, _) => MaterialApp(
       title: 'Keepi',
       debugShowCheckedModeBanner: false,
-      locale: const Locale('ar'),
+      locale: loc,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -87,7 +91,7 @@ class QuickKeepApp extends StatelessWidget {
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       home: const HomePage(),
-    );
+    ));
   }
 }
 
@@ -211,7 +215,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    L.locale.addListener(_onLang);
     _init();
+  }
+
+  void _onLang() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -274,6 +283,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    L.locale.removeListener(_onLang);
     WidgetsBinding.instance.removeObserver(this);
     _shareSub?.cancel();
     _search.dispose();
@@ -316,7 +326,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_suggestKey, _suggest);
-    _toast(_suggest ? 'اقتراح الحفظ مفعّل' : 'اقتراح الحفظ متوقف');
+    _toast(_suggest ? tr('اقتراح الحفظ مفعّل') : tr('اقتراح الحفظ متوقف'));
   }
 
   Future<void> _addText(String text) async {
@@ -362,19 +372,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await _addText(f.path);
       }
     }
-    _toast('تم الحفظ');
+    _toast(tr('تم الحفظ'));
   }
 
   Future<void> _pasteAndSave() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty) {
-      _toast('الحافظة فارغة (النص فقط)');
+      _toast(tr('الحافظة فارغة (النص فقط)'));
       return;
     }
     await _addText(text);
     setState(() => _suggestion = null);
-    _toast('تم اللصق والحفظ');
+    _toast(tr('تم اللصق والحفظ'));
   }
 
   Future<void> _pickImage(ImageSource src) async {
@@ -393,9 +403,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     messenger.hideCurrentSnackBar();
     final ctrl = messenger.showSnackBar(
       SnackBar(
-        content: const Text('تم الحذف'),
+        content: Text(tr('تم الحذف')),
         action: SnackBarAction(
-          label: 'تراجع',
+          label: tr('تراجع'),
           onPressed: () async {
             _items.insert(math.min(idx, _items.length), it);
             await _removeTomb(it.id);
@@ -427,7 +437,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _editTags(Item it) async {
-    final n = await _askName('الوسوم (افصل بينها بفاصلة)', it.tags.join('، '));
+    final n = await _askName(tr('الوسوم (افصل بينها بفاصلة)'), it.tags.join('، '));
     if (n == null) return;
     it.tags = n
         .split(RegExp(r'[,،\n]'))
@@ -453,7 +463,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     };
     await Clipboard.setData(
         ClipboardData(text: const JsonEncoder.withIndent('  ').convert(data)));
-    _toast('تم نسخ النسخة الاحتياطية (النصوص والروابط) إلى الحافظة');
+    _toast(tr('تم نسخ النسخة الاحتياطية (النصوص والروابط) إلى الحافظة'));
   }
 
   Future<void> _importBackup() async {
@@ -478,9 +488,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _save();
       await _saveWs();
       setState(() {});
-      _toast('تمت استعادة $added عنصر');
+      _toast(L.isAr ? 'تمت استعادة $added عنصر' : 'Restored $added items');
     } catch (_) {
-      _toast('انسخ أولاً نص النسخة الاحتياطية ثم أعد المحاولة');
+      _toast(tr('انسخ أولاً نص النسخة الاحتياطية ثم أعد المحاولة'));
     }
   }
 
@@ -510,7 +520,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _sync({bool manual = false}) async {
     if (!SyncService.signedIn || _syncing) return;
     _syncing = true;
-    if (mounted) setState(() => _syncState = 'جارٍ المزامنة…');
+    if (mounted) setState(() => _syncState = tr('جارٍ المزامنة…'));
     try {
       final prefs = await SharedPreferences.getInstance();
       final tomb = (prefs.getStringList('tomb_v1') ?? []).toSet();
@@ -627,13 +637,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await prefs.setString(
           _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
       if (mounted) {
-        setState(() => _syncState = limit ? 'بلغت الحد المجاني' : 'متزامن ✓');
+        setState(() => _syncState = limit ? tr('بلغت الحد المجاني') : tr('متزامن ✓'));
       }
       if (limit) _limitDialog();
-      if (manual) _toast(limit ? 'بلغت 500 عنصر (الحد المجاني)' : 'تمت المزامنة');
+      if (manual) _toast(limit ? tr('بلغت 500 عنصر (الحد المجاني)') : tr('تمت المزامنة'));
     } catch (e) {
-      if (mounted) setState(() => _syncState = 'تعذّرت المزامنة');
-      if (manual) _toast('تعذّرت المزامنة، تحقق من الإنترنت');
+      if (mounted) setState(() => _syncState = tr('تعذّرت المزامنة'));
+      if (manual) _toast(tr('تعذّرت المزامنة، تحقق من الإنترنت'));
     } finally {
       _syncing = false;
     }
@@ -644,12 +654,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('وصلت للحد المجاني'),
-        content: const Text(
-            'الخطة المجانية تتيح مزامنة 500 عنصر. باقي عناصرك محفوظة على هذا الهاتف. الاشتراك المميز (غير محدود) سيتوفر قريباً.'),
+        title: Text(tr('وصلت للحد المجاني')),
+        content: Text(
+            tr('الخطة المجانية تتيح مزامنة 500 عنصر. باقي عناصرك محفوظة على هذا الهاتف. الاشتراك المميز (غير محدود) سيتوفر قريباً.')),
         actions: [
           FilledButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('حسناً')),
+              onPressed: () => Navigator.pop(ctx), child: Text(tr('حسناً'))),
         ],
       ),
     );
@@ -668,7 +678,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         Future<void> go(bool signup) async {
           final e = email.text.trim();
           if (e.isEmpty || pw.text.length < 6) {
-            setS(() => err = 'أدخل البريد وكلمة مرور (6 أحرف فأكثر)');
+            setS(() => err = tr('أدخل البريد وكلمة مرور (6 أحرف فأكثر)'));
             return;
           }
           setS(() {
@@ -681,7 +691,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             if (r == 'confirm') {
               setS(() {
                 busy = false;
-                err = 'أُرسلت رسالة تأكيد إلى بريدك. فعّله ثم سجّل الدخول.';
+                err = tr('أُرسلت رسالة تأكيد إلى بريدك. فعّله ثم سجّل الدخول.');
               });
               return;
             }
@@ -709,12 +719,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: inn
                 ? [
-                    const Text('الحساب والمزامنة',
+                    Text(tr('الحساب والمزامنة'),
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Text(SyncService.email ?? ''),
                     const SizedBox(height: 4),
-                    Text('${_items.where((e) => e.type != ItemType.image).length} / 500 عنصر (الخطة المجانية) · الصور تبقى على الهاتف',
+                    Text(L.isAr ? '${_items.where((e) => e.type != ItemType.image).length} / 500 عنصر (الخطة المجانية) · الصور تبقى على الهاتف' : '${_items.where((e) => e.type != ItemType.image).length} / 500 items (free plan) · images stay on this phone',
                         style: const TextStyle(fontSize: 12.5)),
                     const SizedBox(height: 14),
                     FilledButton.icon(
@@ -723,7 +733,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         _sync(manual: true);
                       },
                       icon: const Icon(Icons.sync_rounded),
-                      label: const Text('مزامنة الآن'),
+                      label: Text(tr('مزامنة الآن')),
                     ),
                     TextButton(
                       onPressed: () async {
@@ -731,25 +741,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) setState(() => _syncState = '');
                       },
-                      child: const Text('تسجيل الخروج'),
+                      child: Text(tr('تسجيل الخروج')),
                     ),
                   ]
                 : [
-                    const Text('سجّل الدخول لمزامنة عناصرك بين أجهزتك',
+                    Text(tr('سجّل الدخول لمزامنة عناصرك بين أجهزتك'),
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
                     TextField(
                       controller: email,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                          labelText: 'البريد الإلكتروني', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                          labelText: tr('البريد الإلكتروني'), border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: pw,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                          labelText: 'كلمة المرور', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                          labelText: tr('كلمة المرور'), border: OutlineInputBorder()),
                     ),
                     if (err != null)
                       Padding(
@@ -763,14 +773,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           ? const SizedBox(
                               height: 18, width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('دخول'),
+                          : Text(tr('دخول')),
                     ),
                     OutlinedButton(
                       onPressed: busy ? null : () => go(true),
-                      child: const Text('إنشاء حساب جديد'),
+                      child: Text(tr('إنشاء حساب جديد')),
                     ),
                     const SizedBox(height: 4),
-                    const Text('الاستخدام دون حساب متاح دائماً، وعناصرك تبقى على هاتفك.',
+                    Text(tr('الاستخدام دون حساب متاح دائماً، وعناصرك تبقى على هاتفك.'),
                         style: TextStyle(fontSize: 12)),
                   ],
           ),
@@ -803,22 +813,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           controller: c,
           autofocus: true,
           maxLength: 24,
-          decoration: const InputDecoration(hintText: 'الاسم'),
+          decoration: InputDecoration(hintText: tr('الاسم')),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(ctx), child: Text(tr('إلغاء'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, c.text.trim()),
-              child: const Text('حفظ')),
+              child: Text(tr('حفظ'))),
         ],
       ),
     );
   }
 
   Future<void> _addWorkspace() async {
-    final n = await _askName('مساحة عمل جديدة');
+    final n = await _askName(tr('مساحة عمل جديدة'));
     if (n == null || n.isEmpty) return;
     final w = Workspace(_newId(), n, DateTime.now().toUtc());
     _workspaces.add(w);
@@ -836,17 +846,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: const Text('إعادة تسمية'),
+              title: Text(tr('إعادة تسمية')),
               onTap: () => Navigator.pop(ctx, 'rename')),
           ListTile(
               leading: const Icon(Icons.folder_delete_outlined),
-              title: const Text('حذف المساحة (تبقى عناصرها)'),
+              title: Text(tr('حذف المساحة (تبقى عناصرها)')),
               onTap: () => Navigator.pop(ctx, 'delete')),
         ]),
       ),
     );
     if (a == 'rename') {
-      final n = await _askName('إعادة تسمية', w.name);
+      final n = await _askName(tr('إعادة تسمية'), w.name);
       if (n != null && n.isNotEmpty) {
         w.name = n;
         w.updatedAt = DateTime.now().toUtc();
@@ -874,14 +884,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       context: context,
       builder: (ctx) => SafeArea(
         child: ListView(shrinkWrap: true, children: [
-          const ListTile(
-              title: Text('نقل إلى مساحة عمل',
+          ListTile(
+              title: Text(tr('نقل إلى مساحة عمل'),
                   style: TextStyle(fontWeight: FontWeight.bold))),
           ListTile(
               leading: Icon(it.ws == null
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off),
-              title: const Text('بدون مساحة'),
+              title: Text(tr('بدون مساحة')),
               onTap: () => Navigator.pop(ctx, [null])),
           for (final w in _workspaces)
             ListTile(
@@ -942,12 +952,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
         children: [
-          chip('الكل', _wsFilter == null && !_favOnly,
+          chip(tr('الكل'), _wsFilter == null && !_favOnly,
               () => setState(() {
                     _wsFilter = null;
                     _favOnly = false;
                   })),
-          chip('المفضلة', _favOnly,
+          chip(tr('المفضلة'), _favOnly,
               () => setState(() {
                     _favOnly = !_favOnly;
                     _wsFilter = null;
@@ -1033,7 +1043,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
     } else {
       await Clipboard.setData(ClipboardData(text: it.content));
-      _toast('تم النسخ');
+      _toast(tr('تم النسخ'));
     }
   }
 
@@ -1079,14 +1089,136 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           foregroundColor: Brand.onAmber,
           elevation: 3,
           icon: const Icon(Icons.add_rounded, size: 26),
-          label: const Text('إضافة',
+          label: Text(tr('إضافة'),
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         ),
       ),
     );
   }
 
+  bool _searching = false;
+
   Widget _header() {
+    final white = Colors.white;
+    final titleRow = Row(
+      key: const ValueKey('title'),
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset('assets/icon/icon.png', width: 34, height: 34),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Keepi',
+                  style: TextStyle(
+                      color: white,
+                      fontSize: 21,
+                      letterSpacing: 0.3,
+                      fontWeight: FontWeight.bold,
+                      height: 1.05)),
+              Text(
+                _items.isEmpty
+                    ? '${tr('احفظ أي شيء بسرعة')} · $kBuildLabel'
+                    : '${_items.length} ${L.isAr ? 'عنصر محفوظ' : 'items'} · $kBuildLabel${_syncState.isEmpty ? '' : ' · $_syncState'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: white.withValues(alpha: 0.75), fontSize: 11.5),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: tr('بحث'),
+          color: white,
+          icon: Icon(_query.isEmpty
+              ? Icons.search_rounded
+              : Icons.manage_search_rounded),
+          onPressed: () => setState(() => _searching = true),
+        ),
+        IconButton(
+          tooltip: tr('لصق وحفظ'),
+          color: white,
+          icon: const Icon(Icons.content_paste_go_rounded),
+          onPressed: _pasteAndSave,
+        ),
+        PopupMenuButton<String>(
+          tooltip: tr('المزيد'),
+          iconColor: white,
+          onSelected: (v) {
+            switch (v) {
+              case 'account':
+                _accountSheet();
+              case 'lang':
+                _langDialog();
+              case 'suggest':
+                _toggleSuggest();
+              case 'export':
+                _exportBackup();
+              default:
+                _importBackup();
+            }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'account', child: Text(tr('الحساب والمزامنة'))),
+            PopupMenuItem(
+                value: 'lang',
+                child: Text('${tr('اللغة')}: ${L.names[L.code]}')),
+            PopupMenuItem(
+                value: 'suggest',
+                child: Text(_suggest
+                    ? tr('إيقاف اقتراح الحفظ')
+                    : tr('تفعيل اقتراح الحفظ'))),
+            PopupMenuItem(
+                value: 'export', child: Text(tr('نسخ احتياطي (نسخ إلى الحافظة)'))),
+            PopupMenuItem(value: 'import', child: Text(tr('استعادة من الحافظة'))),
+          ],
+        ),
+      ],
+    );
+
+    final searchRow = Row(
+      key: const ValueKey('search'),
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _search,
+            autofocus: true,
+            onChanged: (v) => setState(() => _query = v),
+            style: TextStyle(color: white),
+            cursorColor: white,
+            decoration: InputDecoration(
+              hintText: tr('ابحث في محفوظاتك...'),
+              hintStyle: TextStyle(color: white.withValues(alpha: 0.7)),
+              prefixIcon: Icon(Icons.search_rounded,
+                  color: white.withValues(alpha: 0.8)),
+              filled: true,
+              fillColor: white.withValues(alpha: 0.16),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ),
+        IconButton(
+          color: white,
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => setState(() {
+            _search.clear();
+            _query = '';
+            _searching = false;
+          }),
+        ),
+      ],
+    );
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -1094,123 +1226,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           end: Alignment.bottomCenter,
           colors: [Brand.tealLight, Brand.tealDeep],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: const EdgeInsets.fromLTRB(14, 2, 6, 10),
           child: Column(
             children: [
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset('assets/icon/icon.png',
-                        width: 40, height: 40),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Keepi',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            letterSpacing: 0.3,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
-                          ),
-                        ),
-                        Text(
-                          _items.isEmpty
-                              ? 'احفظ أي شيء بسرعة · $kBuildLabel'
-                              : '${_items.length} عنصر محفوظ · $kBuildLabel${_syncState.isEmpty ? '' : ' · $_syncState'}',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip:
-                        _suggest ? 'إيقاف اقتراح الحفظ' : 'تفعيل اقتراح الحفظ',
-                    color: Colors.white,
-                    icon: Icon(_suggest
-                        ? Icons.notifications_active_rounded
-                        : Icons.notifications_off_outlined),
-                    onPressed: _toggleSuggest,
-                  ),
-                  IconButton(
-                    tooltip: 'لصق وحفظ',
-                    color: Colors.white,
-                    icon: const Icon(Icons.content_paste_go_rounded),
-                    onPressed: _pasteAndSave,
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: 'المزيد',
-                    iconColor: Colors.white,
-                    onSelected: (v) => v == 'account'
-                        ? _accountSheet()
-                        : v == 'export'
-                            ? _exportBackup()
-                            : _importBackup(),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                          value: 'account', child: Text('الحساب والمزامنة')),
-                      PopupMenuItem(
-                          value: 'export', child: Text('نسخ احتياطي (نسخ إلى الحافظة)')),
-                      PopupMenuItem(
-                          value: 'import', child: Text('استعادة من الحافظة')),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _search,
-                onChanged: (v) => setState(() => _query = v),
-                style: const TextStyle(color: Colors.white),
-                cursorColor: Colors.white,
-                decoration: InputDecoration(
-                  hintText: 'ابحث في محفوظاتك...',
-                  hintStyle:
-                      TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      color: Colors.white.withValues(alpha: 0.8)),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close_rounded,
-                              color: Colors.white),
-                          onPressed: () => setState(() {
-                            _search.clear();
-                            _query = '';
-                          }),
-                        ),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              SizedBox(
+                height: 48,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child: _searching || _query.isNotEmpty ? searchRow : titleRow,
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 38,
-                child: Row(
-                  children: [
-                    _chip('الكل', Icons.apps_rounded, null),
-                    _chip('نصوص', Icons.notes_rounded, ItemType.text),
-                    _chip('روابط', Icons.link_rounded, ItemType.link),
-                    _chip('صور', Icons.image_outlined, ItemType.image),
-                  ],
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: SizedBox(
+                  height: 34,
+                  child: Row(
+                    children: [
+                      _chip(tr('الكل'), Icons.apps_rounded, null),
+                      _chip(tr('نصوص'), Icons.notes_rounded, ItemType.text),
+                      _chip(tr('روابط'), Icons.link_rounded, ItemType.link),
+                      _chip(tr('صور'), Icons.image_outlined, ItemType.image),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1218,6 +1261,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Future<void> _langDialog() async {
+    final c = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(tr('اللغة')),
+        children: [
+          for (final e in L.names.entries)
+            ListTile(
+              title: Text(e.value),
+              trailing: e.key == L.code ? const Icon(Icons.check_rounded) : null,
+              onTap: () => Navigator.pop(ctx, e.key),
+            ),
+        ],
+      ),
+    );
+    if (c != null) await L.set(c);
   }
 
   Widget _chip(String label, IconData icon, ItemType? t) {
@@ -1279,7 +1340,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   size: 20, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                link ? 'رابط جديد في الحافظة' : 'نص جديد في الحافظة',
+                link ? tr('رابط جديد في الحافظة') : tr('نص جديد في الحافظة'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -1300,7 +1361,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             children: [
               TextButton(
                 onPressed: () => setState(() => _suggestion = null),
-                child: const Text('تجاهل'),
+                child: Text(tr('تجاهل')),
               ),
               const SizedBox(width: 6),
               FilledButton.icon(
@@ -1309,12 +1370,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   foregroundColor: Brand.onAmber,
                 ),
                 icon: const Icon(Icons.bookmark_add_rounded, size: 19),
-                label: const Text('احفظ',
+                label: Text(tr('احفظ'),
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () async {
                   setState(() => _suggestion = null);
                   await _addText(text);
-                  _toast('تم الحفظ');
+                  _toast(tr('تم الحفظ'));
                 },
               ),
             ],
@@ -1351,15 +1412,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 22),
             Text(
-              noItems ? 'لا يوجد شيء هنا بعد' : 'لا توجد نتائج',
+              noItems ? tr('لا يوجد شيء هنا بعد') : tr('لا توجد نتائج'),
               style:
                   const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               noItems
-                  ? 'انسخ نصاً أو رابطاً ثم افتح التطبيق، أو حدّد أي نص واختر «Keepi» من قائمة التحديد، أو شارك محتوى إليه مباشرة.'
-                  : 'جرّب كلمة بحث أخرى أو غيّر التصنيف.',
+                  ? tr('انسخ نصاً أو رابطاً ثم افتح التطبيق، أو حدّد أي نص واختر «Keepi» من قائمة التحديد، أو شارك محتوى إليه مباشرة.')
+                  : tr('جرّب كلمة بحث أخرى أو غيّر التصنيف.'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 height: 1.6,
@@ -1389,11 +1450,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _typeLabel(ItemType t) {
     switch (t) {
       case ItemType.link:
-        return 'رابط';
+        return tr('رابط');
       case ItemType.image:
-        return 'صورة';
+        return tr('صورة');
       case ItemType.text:
-        return 'نص';
+        return tr('نص');
     }
   }
 
@@ -1416,8 +1477,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final diff = today.difference(day).inDays;
     final hm =
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-    if (diff == 0) return 'اليوم $hm';
-    if (diff == 1) return 'أمس $hm';
+    if (diff == 0) return L.isAr ? 'اليوم $hm' : 'Today $hm';
+    if (diff == 1) return L.isAr ? 'أمس $hm' : 'Yesterday $hm';
     return '${d.year}/${d.month}/${d.day}';
   }
 
@@ -1641,16 +1702,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               if (it.type != ItemType.image)
-                                action(Icons.copy_rounded, 'نسخ', () {
+                                action(Icons.copy_rounded, tr('نسخ'), () {
                                   Clipboard.setData(
                                       ClipboardData(text: it.content));
-                                  _toast('تم النسخ');
+                                  _toast(tr('تم النسخ'));
                                 }),
                               action(
                                 it.fav
                                     ? Icons.star_rounded
                                     : Icons.star_outline_rounded,
-                                it.fav ? 'إزالة من المفضلة' : 'مفضلة',
+                                it.fav ? tr('إزالة من المفضلة') : tr('مفضلة'),
                                 () => _toggleFav(it),
                                 color: it.fav ? Brand.amber : null,
                               ),
@@ -1658,15 +1719,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 it.pinned
                                     ? Icons.push_pin_rounded
                                     : Icons.push_pin_outlined,
-                                it.pinned ? 'إلغاء التثبيت' : 'تثبيت',
+                                it.pinned ? tr('إلغاء التثبيت') : tr('تثبيت'),
                                 () => _togglePin(it),
                                 color: it.pinned ? Brand.amber : null,
                               ),
-                              action(Icons.sell_outlined, 'وسوم',
+                              action(Icons.sell_outlined, tr('وسوم'),
                                   () => _editTags(it)),
-                              action(Icons.folder_open_rounded, 'نقل',
+                              action(Icons.folder_open_rounded, tr('نقل'),
                                   () => _moveItem(it)),
-                              action(Icons.delete_outline_rounded, 'حذف',
+                              action(Icons.delete_outline_rounded, tr('حذف'),
                                   () => _deleteWithUndo(it)),
                             ],
                           ),
@@ -1709,22 +1770,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(4, 0, 4, 16),
-                child: Text('إضافة جديدة',
+                child: Text(tr('إضافة جديدة'),
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
               Row(
                 children: [
-                  _addTile(ctx, Icons.content_paste_rounded, 'لصق',
+                  _addTile(ctx, Icons.content_paste_rounded, tr('لصق'),
                       Brand.tealLight, _pasteAndSave),
-                  _addTile(ctx, Icons.edit_note_rounded, 'كتابة',
+                  _addTile(ctx, Icons.edit_note_rounded, tr('كتابة'),
                       Brand.tealMid, _showAddText),
-                  _addTile(ctx, Icons.photo_library_outlined, 'معرض',
+                  _addTile(ctx, Icons.photo_library_outlined, tr('معرض'),
                       const Color(0xFFE09A00),
                       () => _pickImage(ImageSource.gallery)),
-                  _addTile(ctx, Icons.photo_camera_outlined, 'كاميرا',
+                  _addTile(ctx, Icons.photo_camera_outlined, tr('كاميرا'),
                       const Color(0xFF3C8DAD),
                       () => _pickImage(ImageSource.camera)),
                 ],
@@ -1782,9 +1843,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(4, 0, 4, 12),
-              child: Text('نص أو رابط',
+              child: Text(tr('نص أو رابط'),
                   style:
                       TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
@@ -1794,7 +1855,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               minLines: 4,
               maxLines: 9,
               decoration: InputDecoration(
-                hintText: 'اكتب هنا أو الصق رابطاً...',
+                hintText: tr('اكتب هنا أو الصق رابطاً...'),
                 filled: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -1814,7 +1875,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       borderRadius: BorderRadius.circular(16)),
                 ),
                 icon: const Icon(Icons.bookmark_add_rounded),
-                label: const Text('حفظ',
+                label: Text(tr('حفظ'),
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 onPressed: () {

@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'l10n.dart';
+
 /// مفتاح publishable عام وآمن للنشر؛ الحماية الفعلية عبر سياسات RLS.
 const kSupaUrl = 'https://ktvuggfqjwpcenjnqhlh.supabase.co';
 const kSupaKey = 'sb_publishable_8VykSLQRvlh_WwRjBUtrcw_Kd-srGG7';
@@ -23,13 +25,13 @@ class SyncService {
   static String _msg(Object e) {
     if (e is AuthException) {
       final m = e.message.toLowerCase();
-      if (m.contains('invalid login')) return 'البريد أو كلمة المرور غير صحيحة';
-      if (m.contains('already')) return 'هذا البريد مسجّل مسبقاً، سجّل الدخول';
-      if (m.contains('password')) return 'كلمة المرور قصيرة (6 أحرف على الأقل)';
-      if (m.contains('confirm')) return 'فعّل بريدك أولاً عبر الرسالة المرسلة';
+      if (m.contains('invalid login')) return tr('البريد أو كلمة المرور غير صحيحة');
+      if (m.contains('already')) return tr('هذا البريد مسجّل مسبقاً، سجّل الدخول');
+      if (m.contains('password')) return tr('كلمة المرور قصيرة (6 أحرف على الأقل)');
+      if (m.contains('confirm')) return tr('فعّل بريدك أولاً عبر الرسالة المرسلة');
       return e.message;
     }
-    return 'تعذّر الاتصال، تحقق من الإنترنت';
+    return tr('تعذّر الاتصال، تحقق من الإنترنت');
   }
 
   /// يعيد null عند النجاح، أو رسالة خطأ.
