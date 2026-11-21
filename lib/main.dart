@@ -13,10 +13,16 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'sync.dart';
+
 /// يُستبدل أثناء البناء برقم البناء، لتتأكد أي نسخة مثبتة عندك.
 const kBuildLabel = 'dev';
 
-void main() => runApp(const QuickKeepApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SyncService.init();
+  runApp(const QuickKeepApp());
+}
 
 /// هوية كويك كيب: أخضر مائل للزمردي + كهرماني.
 class Brand {
@@ -92,6 +98,7 @@ class Item {
   final ItemType type;
   final String content; // نص، رابط، أو اسم ملف الصورة
   final DateTime createdAt;
+  DateTime updatedAt;
   bool pinned;
   bool fav;
   String? ws;
@@ -102,11 +109,13 @@ class Item {
     required this.type,
     required this.content,
     required this.createdAt,
+    DateTime? updatedAt,
     this.pinned = false,
     this.fav = false,
     this.ws,
     List<String>? tags,
-  }) : tags = tags ?? [];
+  })  : tags = tags ?? [],
+        updatedAt = updatedAt ?? createdAt;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -117,6 +126,20 @@ class Item {
         'fav': fav,
         'ws': ws,
         'tags': tags,
+        'updatedAt': updatedAt.toIso8601String(),
+      };
+
+  Map<String, dynamic> toRemote({bool deleted = false}) => {
+        'id': id,
+        'type': type.name,
+        'content': content,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'updated_at': (deleted ? DateTime.now() : updatedAt).toUtc().toIso8601String(),
+        'pinned': pinned,
+        'fav': fav,
+        'ws': ws,
+        'tags': tags,
+        'deleted': deleted,
       };
 
   factory Item.fromJson(Map<String, dynamic> j) => Item(
@@ -128,16 +151,32 @@ class Item {
         fav: j['fav'] ?? false,
         ws: j['ws'] as String?,
         tags: ((j['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
+        updatedAt: j['updatedAt'] == null ? null : DateTime.tryParse(j['updatedAt']),
       );
 }
 
 class Workspace {
   final String id;
   String name;
-  Workspace(this.id, this.name);
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
-  factory Workspace.fromJson(Map<String, dynamic> j) =>
-      Workspace(j['id'], j['name']);
+  DateTime updatedAt;
+  Workspace(this.id, this.name, [DateTime? u])
+      : updatedAt = u ?? DateTime.fromMillisecondsSinceEpoch(0);
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'name': name, 'updatedAt': updatedAt.toIso8601String()};
+  Map<String, dynamic> toRemote({bool deleted = false}) => {
+        'id': id,
+        'name': name,
+        'updated_at': (deleted || updatedAt.millisecondsSinceEpoch == 0
+                ? DateTime.now()
+                : updatedAt)
+            .toUtc()
+            .toIso8601String(),
+        'deleted': deleted,
+      };
+  factory Workspace.fromJson(Map<String, dynamic> j) => Workspace(
+      j['id'],
+      j['name'],
+      j['updatedAt'] == null ? null : DateTime.tryParse(j['updatedAt']));
 }
 
 class HomePage extends StatefulWidget {
@@ -179,7 +218,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _ready) {
       // قد تضيف عناصر خارج التطبيق (قائمة تحديد النص)، فنعيد التحميل أولاً.
-      _loadItems().then((_) => _checkClipboard());
+      _loadItems().then((_) {
+        _checkClipboard();
+        _sync();
+      });
     }
   }
 
@@ -192,6 +234,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _lastClip = prefs.getString(_lastClipKey);
     await _loadItems();
     setState(() => _ready = true);
+    _sync();
     _checkClipboard();
 
     // استقبال المشاركة من التطبيقات الأخرى
@@ -241,6 +284,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _prefsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
+    _scheduleSync();
   }
 
   String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
@@ -344,7 +388,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (idx < 0) return;
     _items.removeAt(idx);
     setState(() {}); // متزامن: مطلوب من Dismissible
-    _save();
+    _addTomb(it.id).then((_) => _save());
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     final ctrl = messenger.showSnackBar(
@@ -354,6 +398,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           label: 'تراجع',
           onPressed: () async {
             _items.insert(math.min(idx, _items.length), it);
+            await _removeTomb(it.id);
             await _save();
             if (mounted) setState(() {});
           },
@@ -369,12 +414,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _togglePin(Item it) async {
     it.pinned = !it.pinned;
+    it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
   }
 
   Future<void> _toggleFav(Item it) async {
     it.fav = !it.fav;
+    it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
   }
@@ -389,6 +436,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         .toSet()
         .take(8)
         .toList();
+    it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
   }
@@ -436,10 +484,306 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  // ───────────── الحساب والمزامنة ─────────────
+  Timer? _syncTimer;
+  bool _syncing = false;
+  String _syncState = '';
+
+  void _scheduleSync() {
+    if (!SyncService.signedIn) return;
+    _syncTimer?.cancel();
+    _syncTimer = Timer(const Duration(seconds: 3), _sync);
+  }
+
+  Future<void> _addTomb(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final l = (prefs.getStringList('tomb_v1') ?? []).toSet()..add(id);
+    await prefs.setStringList('tomb_v1', l.toList());
+  }
+
+  Future<void> _removeTomb(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final l = (prefs.getStringList('tomb_v1') ?? []).toSet()..remove(id);
+    await prefs.setStringList('tomb_v1', l.toList());
+  }
+
+  Future<void> _sync({bool manual = false}) async {
+    if (!SyncService.signedIn || _syncing) return;
+    _syncing = true;
+    if (mounted) setState(() => _syncState = 'جارٍ المزامنة…');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tomb = (prefs.getStringList('tomb_v1') ?? []).toSet();
+      final now = DateTime.now().toUtc();
+
+      // ── مساحات العمل
+      final rw = {
+        for (final m in await SyncService.fetch('workspaces')) m['id'] as String: m
+      };
+      final upW = <Map<String, dynamic>>[];
+      for (final id in tomb.where((e) => e.startsWith('w:'))) {
+        final r = rw[id.substring(2)];
+        if (r != null && r['deleted'] != true) {
+          upW.add({'id': r['id'], 'name': r['name'], 'updated_at': now.toIso8601String(), 'deleted': true});
+        }
+      }
+      for (final w in List.of(_workspaces)) {
+        if (tomb.contains('w:${w.id}')) continue;
+        final r = rw[w.id];
+        if (r == null) {
+          upW.add(w.toRemote());
+        } else if (r['deleted'] == true) {
+          _workspaces.remove(w);
+        } else {
+          final ru = DateTime.parse(r['updated_at']).toUtc();
+          if (w.updatedAt.isAfter(ru)) {
+            upW.add(w.toRemote());
+          } else if (ru.isAfter(w.updatedAt)) {
+            w.name = r['name'];
+            w.updatedAt = ru;
+          }
+        }
+      }
+      final localW = _workspaces.map((e) => e.id).toSet();
+      for (final r in rw.values) {
+        if (r['deleted'] != true &&
+            !localW.contains(r['id']) &&
+            !tomb.contains('w:${r['id']}')) {
+          _workspaces.add(Workspace(r['id'], r['name'], DateTime.parse(r['updated_at']).toUtc()));
+        }
+      }
+      if (upW.isNotEmpty) await SyncService.upsert('workspaces', upW);
+
+      // ── العناصر
+      final ri = {
+        for (final m in await SyncService.fetch('items')) m['id'] as String: m
+      };
+      final up = <Map<String, dynamic>>[];
+      for (final id in tomb.where((e) => !e.startsWith('w:'))) {
+        final r = ri[id];
+        if (r != null && r['deleted'] != true) {
+          up.add({
+            'id': r['id'], 'type': r['type'], 'content': r['content'],
+            'updated_at': now.toIso8601String(), 'deleted': true,
+          });
+        }
+      }
+      final gone = <Item>[];
+      for (final it in _items) {
+        if (tomb.contains(it.id)) continue;
+        final r = ri[it.id];
+        if (r == null) {
+          if (it.type != ItemType.image) up.add(it.toRemote());
+        } else if (r['deleted'] == true) {
+          gone.add(it);
+        } else {
+          final ru = DateTime.parse(r['updated_at']).toUtc();
+          final lu = it.updatedAt.toUtc();
+          if (lu.isAfter(ru.add(const Duration(seconds: 1)))) {
+            up.add(it.toRemote());
+          } else if (ru.isAfter(lu)) {
+            it.pinned = r['pinned'] ?? false;
+            it.fav = r['fav'] ?? false;
+            it.ws = r['ws'] as String?;
+            it.tags = ((r['tags'] as List?) ?? []).map((e) => e.toString()).toList();
+            it.updatedAt = ru;
+          }
+        }
+      }
+      for (final g in gone) {
+        _items.remove(g);
+      }
+      final localI = _items.map((e) => e.id).toSet();
+      for (final r in ri.values) {
+        if (r['deleted'] != true &&
+            !localI.contains(r['id']) &&
+            !tomb.contains(r['id'])) {
+          _items.add(Item(
+            id: r['id'],
+            type: ItemType.values.byName(r['type']),
+            content: r['content'],
+            createdAt: DateTime.parse(r['created_at']),
+            updatedAt: DateTime.parse(r['updated_at']).toUtc(),
+            pinned: r['pinned'] ?? false,
+            fav: r['fav'] ?? false,
+            ws: r['ws'] as String?,
+            tags: ((r['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
+          ));
+        }
+      }
+      var limit = false;
+      try {
+        if (up.isNotEmpty) await SyncService.upsert('items', up);
+      } catch (e) {
+        if (e.toString().contains('FREE_LIMIT_REACHED')) {
+          limit = true;
+        } else {
+          rethrow;
+        }
+      }
+      await prefs.setStringList('tomb_v1', []);
+      await prefs.setString(
+          _prefsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
+      await prefs.setString(
+          _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
+      if (mounted) {
+        setState(() => _syncState = limit ? 'بلغت الحد المجاني' : 'متزامن ✓');
+      }
+      if (limit) _limitDialog();
+      if (manual) _toast(limit ? 'بلغت 500 عنصر (الحد المجاني)' : 'تمت المزامنة');
+    } catch (e) {
+      if (mounted) setState(() => _syncState = 'تعذّرت المزامنة');
+      if (manual) _toast('تعذّرت المزامنة، تحقق من الإنترنت');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _limitDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('وصلت للحد المجاني'),
+        content: const Text(
+            'الخطة المجانية تتيح مزامنة 500 عنصر. باقي عناصرك محفوظة على هذا الهاتف. الاشتراك المميز (غير محدود) سيتوفر قريباً.'),
+        actions: [
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('حسناً')),
+        ],
+      ),
+    );
+  }
+
+  void _accountSheet() {
+    final email = TextEditingController();
+    final pw = TextEditingController();
+    var busy = false;
+    String? err;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) {
+        final inn = SyncService.signedIn;
+        Future<void> go(bool signup) async {
+          final e = email.text.trim();
+          if (e.isEmpty || pw.text.length < 6) {
+            setS(() => err = 'أدخل البريد وكلمة مرور (6 أحرف فأكثر)');
+            return;
+          }
+          setS(() {
+            busy = true;
+            err = null;
+          });
+          String? res;
+          if (signup) {
+            final r = await SyncService.signUp(e, pw.text);
+            if (r == 'confirm') {
+              setS(() {
+                busy = false;
+                err = 'أُرسلت رسالة تأكيد إلى بريدك. فعّله ثم سجّل الدخول.';
+              });
+              return;
+            }
+            res = r == 'ok' ? null : r;
+          } else {
+            res = await SyncService.signIn(e, pw.text);
+          }
+          if (res != null) {
+            setS(() {
+              busy = false;
+              err = res;
+            });
+            return;
+          }
+          if (ctx.mounted) Navigator.pop(ctx);
+          if (mounted) setState(() {});
+          _sync(manual: true);
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: inn
+                ? [
+                    const Text('الحساب والمزامنة',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    Text(SyncService.email ?? ''),
+                    const SizedBox(height: 4),
+                    Text('${_items.where((e) => e.type != ItemType.image).length} / 500 عنصر (الخطة المجانية) · الصور تبقى على الهاتف',
+                        style: const TextStyle(fontSize: 12.5)),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _sync(manual: true);
+                      },
+                      icon: const Icon(Icons.sync_rounded),
+                      label: const Text('مزامنة الآن'),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await SyncService.signOut();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) setState(() => _syncState = '');
+                      },
+                      child: const Text('تسجيل الخروج'),
+                    ),
+                  ]
+                : [
+                    const Text('سجّل الدخول لمزامنة عناصرك بين أجهزتك',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: email,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                          labelText: 'البريد الإلكتروني', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: pw,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                          labelText: 'كلمة المرور', border: OutlineInputBorder()),
+                    ),
+                    if (err != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(err!, style: const TextStyle(color: Colors.red)),
+                      ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: busy ? null : () => go(false),
+                      child: busy
+                          ? const SizedBox(
+                              height: 18, width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('دخول'),
+                    ),
+                    OutlinedButton(
+                      onPressed: busy ? null : () => go(true),
+                      child: const Text('إنشاء حساب جديد'),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('الاستخدام دون حساب متاح دائماً، وعناصرك تبقى على هاتفك.',
+                        style: TextStyle(fontSize: 12)),
+                  ],
+          ),
+        );
+      }),
+    );
+  }
+
   Future<void> _saveWs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
+    _scheduleSync();
   }
 
   String? _wsName(String? id) {
@@ -476,7 +820,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _addWorkspace() async {
     final n = await _askName('مساحة عمل جديدة');
     if (n == null || n.isEmpty) return;
-    final w = Workspace(_newId(), n);
+    final w = Workspace(_newId(), n, DateTime.now().toUtc());
     _workspaces.add(w);
     await _saveWs();
     setState(() {
@@ -505,14 +849,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final n = await _askName('إعادة تسمية', w.name);
       if (n != null && n.isNotEmpty) {
         w.name = n;
+        w.updatedAt = DateTime.now().toUtc();
         await _saveWs();
         setState(() {});
       }
     } else if (a == 'delete') {
       for (final e in _items) {
-        if (e.ws == w.id) e.ws = null;
+        if (e.ws == w.id) {
+          e.ws = null;
+          e.updatedAt = DateTime.now().toUtc();
+        }
       }
       _workspaces.remove(w);
+      await _addTomb('w:${w.id}');
       if (_wsFilter == w.id) _wsFilter = null;
       await _save();
       await _saveWs();
@@ -546,6 +895,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     if (res == null) return;
     it.ws = res.first;
+    it.updatedAt = DateTime.now().toUtc();
     await _save();
     setState(() {});
   }
@@ -777,7 +1127,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Text(
                           _items.isEmpty
                               ? 'احفظ أي شيء بسرعة · $kBuildLabel'
-                              : '${_items.length} عنصر محفوظ · $kBuildLabel',
+                              : '${_items.length} عنصر محفوظ · $kBuildLabel${_syncState.isEmpty ? '' : ' · $_syncState'}',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.75),
                             fontSize: 12.5,
@@ -804,9 +1154,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   PopupMenuButton<String>(
                     tooltip: 'المزيد',
                     iconColor: Colors.white,
-                    onSelected: (v) =>
-                        v == 'export' ? _exportBackup() : _importBackup(),
+                    onSelected: (v) => v == 'account'
+                        ? _accountSheet()
+                        : v == 'export'
+                            ? _exportBackup()
+                            : _importBackup(),
                     itemBuilder: (_) => const [
+                      PopupMenuItem(
+                          value: 'account', child: Text('الحساب والمزامنة')),
                       PopupMenuItem(
                           value: 'export', child: Text('نسخ احتياطي (نسخ إلى الحافظة)')),
                       PopupMenuItem(

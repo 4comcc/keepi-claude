@@ -127,5 +127,8 @@ if extras:
 """
     s = s.replace("<application", perms + "    <application", 1)
 
+if "android.permission.INTERNET" not in s:
+    s = s.replace("<application", '    <uses-permission android:name="android.permission.INTERNET" />\n\n    <application', 1)
+
 path.write_text(s, encoding="utf-8")
 print("patched", VARIANT)
