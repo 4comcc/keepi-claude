@@ -520,7 +520,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _sync({bool manual = false}) async {
     if (!SyncService.signedIn || _syncing) return;
     _syncing = true;
-    if (mounted) setState(() => _syncState = tr('جارٍ المزامنة…'));
+    if (mounted) setState(() => _syncState = 'جارٍ المزامنة…');
     try {
       final prefs = await SharedPreferences.getInstance();
       final tomb = (prefs.getStringList('tomb_v1') ?? []).toSet();
@@ -637,12 +637,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await prefs.setString(
           _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
       if (mounted) {
-        setState(() => _syncState = limit ? tr('بلغت الحد المجاني') : tr('متزامن ✓'));
+        setState(() => _syncState = limit ? 'بلغت الحد المجاني' : 'متزامن ✓');
       }
       if (limit) _limitDialog();
       if (manual) _toast(limit ? tr('بلغت 500 عنصر (الحد المجاني)') : tr('تمت المزامنة'));
     } catch (e) {
-      if (mounted) setState(() => _syncState = tr('تعذّرت المزامنة'));
+      if (mounted) setState(() => _syncState = 'تعذّرت المزامنة');
       if (manual) _toast(tr('تعذّرت المزامنة، تحقق من الإنترنت'));
     } finally {
       _syncing = false;
@@ -1083,14 +1083,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _showAddMenu,
-          backgroundColor: Brand.amber,
-          foregroundColor: Brand.onAmber,
+        floatingActionButton: Material(
+          color: Brand.amber,
           elevation: 3,
-          icon: const Icon(Icons.add_rounded, size: 26),
-          label: Text(tr('إضافة'),
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: _showAddMenu,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, size: 20, color: Brand.onAmber),
+                  const SizedBox(width: 5),
+                  Text(tr('إضافة'),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Brand.onAmber)),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1123,7 +1138,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text(
                 _items.isEmpty
                     ? '${tr('احفظ أي شيء بسرعة')} · $kBuildLabel'
-                    : '${_items.length} ${L.isAr ? 'عنصر محفوظ' : 'items'} · $kBuildLabel${_syncState.isEmpty ? '' : ' · $_syncState'}',
+                    : '${_items.length} ${L.isAr ? 'عنصر محفوظ' : 'items'} · $kBuildLabel${_syncState.isEmpty ? '' : ' · ${tr(_syncState)}'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
