@@ -78,7 +78,7 @@ class FloatingBubbleService : Service() {
     private fun addBubble() {
         val manager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = manager
-        val size = dp(52)
+        val size = dp(40)
 
         val root = FrameLayout(this)
         val bg = GradientDrawable().apply {
@@ -91,7 +91,7 @@ class FloatingBubbleService : Service() {
         root.elevation = dp(6).toFloat()
         val icon = ImageView(this)
         icon.setImageResource(R.drawable.ic_keepi_tile)
-        val pad = dp(13)
+        val pad = dp(10)
         icon.setPadding(pad, pad, pad, pad)
         root.addView(icon, FrameLayout.LayoutParams(size, size))
 
@@ -166,6 +166,12 @@ class FloatingBubbleService : Service() {
     }
 
     private fun saveClipboard() {
+        // Keepi مفتوح أمامك: الضغطة تعيدك إلى التطبيق السابق
+        val a = MainActivity.visible
+        if (a != null) {
+            a.moveTaskToBack(true)
+            return
+        }
         startActivity(
             Intent(this, ClipboardSaveActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

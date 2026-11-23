@@ -10,6 +10,20 @@ import io.flutter.plugin.common.MethodChannel
 
 /** يضيف قناة بسيطة للتحكم بالنقطة العائمة من واجهة Flutter. */
 class MainActivity : FlutterActivity() {
+    companion object {
+        @Volatile var visible: MainActivity? = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        visible = this
+    }
+
+    override fun onPause() {
+        if (visible === this) visible = null
+        super.onPause()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "keepi/bubble")
