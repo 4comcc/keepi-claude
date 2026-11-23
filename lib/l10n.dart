@@ -51,6 +51,11 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'تعذّر الحفظ': 'Could not save',
+  'اقتراح حفظ لقطة الشاشة': 'Suggest saving screenshots',
+  'تظهر لقطتك الأخيرة للحفظ، وتلوّن النقطة العائمة': 'Shows your latest screenshot to save and highlights the bubble',
+  'لقطة شاشة جديدة': 'New screenshot',
+  'يلزم السماح بقراءة الصور': 'Photo access is required',
   'نقطة عائمة للحفظ السريع': 'Floating quick-save bubble',
   'ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi': 'Tap: save clipboard · Long press: open Keepi',
   'اسمح بالظهور فوق التطبيقات ثم ارجع إلى Keepi': 'Allow display over other apps, then return to Keepi',

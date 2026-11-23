@@ -240,11 +240,66 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   static const _bubbleCh = MethodChannel('keepi/bubble');
   static const _bubbleKey = 'bubble_on';
   bool _bubbleOn = false;
+  bool _shotOn = false;
+  int? _shotId;
+
+  Future<void> _checkShot() async {
+    if (!_shotOn || !_ready || !mounted) return;
+    try {
+      final id = await _bubbleCh.invokeMethod<int>('latestShot');
+      if (id != null && mounted) setState(() => _shotId = id);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleShot(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (on) {
+      bool ok = false;
+      try {
+        ok = await _bubbleCh.invokeMethod<bool>('requestShotPerm') == true;
+      } catch (_) {}
+      if (!ok) {
+        _toast(tr('يلزم السماح بقراءة الصور'));
+        return;
+      }
+    }
+    await prefs.setBool('shot_on', on);
+    setState(() {
+      _shotOn = on;
+      if (!on) _shotId = null;
+    });
+    if (on) _checkShot();
+  }
+
+  Future<void> _saveShot() async {
+    final id = _shotId;
+    if (id == null) return;
+    setState(() => _shotId = null);
+    try {
+      await _bubbleCh.invokeMethod('saveShot', id);
+      await _loadItems();
+      if (mounted) setState(() {});
+      _toast(tr('تم الحفظ'));
+    } catch (_) {
+      _toast(tr('تعذّر الحفظ'));
+    }
+  }
+
+  Future<void> _dismissShot() async {
+    final id = _shotId;
+    setState(() => _shotId = null);
+    if (id != null) {
+      try {
+        await _bubbleCh.invokeMethod('dismissShot', id);
+      } catch (_) {}
+    }
+  }
 
   Future<void> _bubbleSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _bubbleOn = prefs.getBool(_bubbleKey) ?? false;
+      _shotOn = prefs.getBool('shot_on') ?? false;
       if (!_bubbleOn) return;
       if (await _bubbleCh.invokeMethod<bool>('canDraw') == true) {
         await _bubbleCh.invokeMethod('start');
@@ -320,6 +375,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _bubbleSync();
       _loadItems().then((_) {
         _checkClipboard();
+        _checkShot();
         _sync();
       });
     }
@@ -797,6 +853,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         value: _suggest,
                         onChanged: (_) async {
                           await _toggleSuggest();
+                          setS(() {});
+                        },
+                      ),
+                      SwitchListTile(
+                        secondary: Icon(Icons.screenshot_rounded, color: cs.primary),
+                        title: Text(tr('اقتراح حفظ لقطة الشاشة')),
+                        subtitle: Text(tr('تظهر لقطتك الأخيرة للحفظ، وتلوّن النقطة العائمة')),
+                        value: _shotOn,
+                        onChanged: (v) async {
+                          await _toggleShot(v);
                           setS(() {});
                         },
                       ),
@@ -1736,9 +1802,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOut,
               alignment: Alignment.topCenter,
-              child: _suggestion == null
-                  ? const SizedBox(width: double.infinity)
-                  : _suggestionCard(_suggestion!),
+              child: _shotId != null
+                  ? _shotCard()
+                  : _suggestion == null
+                      ? const SizedBox(width: double.infinity)
+                      : _suggestionCard(_suggestion!),
             ),
             Expanded(
               child: !_ready
@@ -1977,6 +2045,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _shotCard() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _dark ? const Color(0xFF1C3A30) : const Color(0xFFE3F3EE),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Brand.amber.withValues(alpha: 0.8), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.screenshot_rounded,
+              size: 22, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(tr('لقطة شاشة جديدة'),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          TextButton(onPressed: _dismissShot, child: Text(tr('تجاهل'))),
+          const SizedBox(width: 6),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Brand.amber,
+              foregroundColor: Brand.onAmber,
+            ),
+            icon: const Icon(Icons.bookmark_add_rounded, size: 19),
+            label: Text(tr('احفظ'),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: _saveShot,
+          ),
+        ],
       ),
     );
   }

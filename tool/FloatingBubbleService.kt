@@ -8,7 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
 import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import android.widget.Toast
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -29,6 +34,44 @@ class FloatingBubbleService : Service() {
     private var wm: WindowManager? = null
     private var bubble: View? = null
     private var lp: WindowManager.LayoutParams? = null
+    private var bg: GradientDrawable? = null
+    private var icon: ImageView? = null
+    private val main = Handler(Looper.getMainLooper())
+    private var observer: ContentObserver? = null
+    private var alertOff = Runnable { setAlert(false) }
+
+    private fun shotOn(): Boolean = getSharedPreferences(
+        "FlutterSharedPreferences", Context.MODE_PRIVATE
+    ).getBoolean("flutter.shot_on", false)
+
+    private fun setAlert(on: Boolean) {
+        val b = bg ?: return
+        main.removeCallbacks(alertOff)
+        if (on) {
+            b.setColor(Color.parseColor("#FFB703"))
+            icon?.setColorFilter(Color.parseColor("#3B2A00"))
+            main.postDelayed(alertOff, 120_000)
+        } else {
+            b.setColor(Color.parseColor("#1E6F5C"))
+            icon?.clearColorFilter()
+        }
+    }
+
+    private fun watchShots() {
+        if (observer != null) return
+        val o = object : ContentObserver(main) {
+            override fun onChange(selfChange: Boolean) {
+                if (shotOn() && MainActivity.visible == null &&
+                    ShotHelper.latest(this@FloatingBubbleService, 60) != null) setAlert(true)
+            }
+        }
+        try {
+            contentResolver.registerContentObserver(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, o
+            )
+            observer = o
+        } catch (_: Exception) {}
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,15 +124,17 @@ class FloatingBubbleService : Service() {
         val size = dp(40)
 
         val root = FrameLayout(this)
-        val bg = GradientDrawable().apply {
+        val bgd = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(Color.parseColor("#1E6F5C"))
             setStroke(dp(2), Color.parseColor("#FFB703"))
         }
-        root.background = bg
+        root.background = bgd
+        bg = bgd
         root.alpha = 0.92f
         root.elevation = dp(6).toFloat()
         val icon = ImageView(this)
+        this.icon = icon
         icon.setImageResource(R.drawable.ic_keepi_tile)
         val pad = dp(10)
         icon.setPadding(pad, pad, pad, pad)
@@ -160,6 +205,7 @@ class FloatingBubbleService : Service() {
         try {
             manager.addView(root, params)
             bubble = root
+            watchShots()
         } catch (e: Exception) {
             stopSelf()
         }
@@ -171,6 +217,19 @@ class FloatingBubbleService : Service() {
         if (a != null) {
             a.moveTaskToBack(true)
             return
+        }
+        if (shotOn()) {
+            val id = ShotHelper.latest(this, 300)
+            if (id != null) {
+                val ok = ShotHelper.save(this, id)
+                setAlert(false)
+                Toast.makeText(
+                    this,
+                    if (ok) "تم حفظ لقطة الشاشة في Keepi" else "تعذّر حفظ لقطة الشاشة",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
         }
         startActivity(
             Intent(this, ClipboardSaveActivity::class.java)
@@ -185,6 +244,9 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onDestroy() {
+        observer?.let { contentResolver.unregisterContentObserver(it) }
+        observer = null
+        main.removeCallbacks(alertOff)
         try { bubble?.let { wm?.removeView(it) } } catch (_: Exception) {}
         bubble = null
         super.onDestroy()
