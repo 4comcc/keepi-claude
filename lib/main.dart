@@ -237,6 +237,46 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   static const _prefsKey = 'items_v1';
   static const _suggestKey = 'suggest_clip';
+  static const _bubbleCh = MethodChannel('keepi/bubble');
+  static const _bubbleKey = 'bubble_on';
+  bool _bubbleOn = false;
+
+  Future<void> _bubbleSync() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _bubbleOn = prefs.getBool(_bubbleKey) ?? false;
+      if (!_bubbleOn) return;
+      if (await _bubbleCh.invokeMethod<bool>('canDraw') == true) {
+        await _bubbleCh.invokeMethod('start');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleBubble(bool on) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      if (on) {
+        if (await _bubbleCh.invokeMethod<bool>('canDraw') != true) {
+          await prefs.setBool(_bubbleKey, true);
+          setState(() => _bubbleOn = true);
+          _toast(tr('اسمح بالظهور فوق التطبيقات ثم ارجع إلى Keepi'));
+          await _bubbleCh.invokeMethod('requestPermission');
+          return;
+        }
+        final ok = await _bubbleCh.invokeMethod<bool>('start') == true;
+        if (!ok) {
+          _toast(tr('تعذّر تشغيل النقطة العائمة'));
+          return;
+        }
+      } else {
+        await _bubbleCh.invokeMethod('stop');
+      }
+      await prefs.setBool(_bubbleKey, on);
+      setState(() => _bubbleOn = on);
+    } catch (_) {
+      _toast(tr('تعذّر تشغيل النقطة العائمة'));
+    }
+  }
   static const _lastClipKey = 'last_clip';
 
   final List<Item> _items = [];
@@ -277,6 +317,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _ready) {
       // قد تضيف عناصر خارج التطبيق (قائمة تحديد النص)، فنعيد التحميل أولاً.
+      _bubbleSync();
       _loadItems().then((_) {
         _checkClipboard();
         _sync();
@@ -293,6 +334,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _lastClip = prefs.getString(_lastClipKey);
     await _loadItems();
     _trashPurge();
+    _bubbleSync();
     setState(() => _ready = true);
     _sync();
     _fillCaptions();
@@ -755,6 +797,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         value: _suggest,
                         onChanged: (_) async {
                           await _toggleSuggest();
+                          setS(() {});
+                        },
+                      ),
+                      SwitchListTile(
+                        secondary: Icon(Icons.bubble_chart_rounded, color: cs.primary),
+                        title: Text(tr('نقطة عائمة للحفظ السريع')),
+                        subtitle: Text(tr('ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi')),
+                        value: _bubbleOn,
+                        onChanged: (v) async {
+                          await _toggleBubble(v);
                           setS(() {});
                         },
                       ),

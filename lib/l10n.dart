@@ -51,6 +51,10 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'نقطة عائمة للحفظ السريع': 'Floating quick-save bubble',
+  'ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi': 'Tap: save clipboard · Long press: open Keepi',
+  'اسمح بالظهور فوق التطبيقات ثم ارجع إلى Keepi': 'Allow display over other apps, then return to Keepi',
+  'تعذّر تشغيل النقطة العائمة': 'Could not start the floating bubble',
   'الإعدادات': 'Settings',
   'إغلاق': 'Close',
   'الحساب': 'Account',

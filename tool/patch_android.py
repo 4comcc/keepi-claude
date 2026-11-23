@@ -111,6 +111,17 @@ clip_parts = """
             android:taskAffinity="" />
 """ if extras else ""
 
+bubble_service = """
+        <service
+            android:name=".FloatingBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating quick-save bubble" />
+        </service>
+""" if extras else ""
+
 tile_service = """
         <service
             android:name=".SaveClipTileService"
@@ -124,11 +135,17 @@ tile_service = """
         </service>
 """ if tile else ""
 
-s = s.replace("</application>", save_activity + clip_parts + tile_service + "    </application>", 1)
+s = s.replace("</application>", save_activity + clip_parts + bubble_service + tile_service + "    </application>", 1)
 
 if extras:
     perms = """    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+"""
+    perms += """    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 """
     s = s.replace("<application", perms + "    <application", 1)
