@@ -378,7 +378,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final t = _pausedAt;
       _pausedAt = null;
       if (t != null &&
-          DateTime.now().difference(t).inSeconds > 30 &&
+          DateTime.now().difference(t).inMinutes >= 5 &&
           (_query.isNotEmpty || _searching)) {
         setState(() {
           _search.clear();
