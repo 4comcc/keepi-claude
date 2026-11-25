@@ -368,8 +368,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  DateTime? _pausedAt;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _pausedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final t = _pausedAt;
+      _pausedAt = null;
+      if (t != null &&
+          DateTime.now().difference(t).inSeconds > 30 &&
+          (_query.isNotEmpty || _searching)) {
+        setState(() {
+          _search.clear();
+          _query = '';
+          _searching = false;
+        });
+      }
+    }
     if (state == AppLifecycleState.resumed && _ready) {
       // قد تضيف عناصر خارج التطبيق (قائمة تحديد النص)، فنعيد التحميل أولاً.
       _bubbleSync();
@@ -1118,6 +1135,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
     final owner = prefs.getString('owner_uid');
+    final hasLocal = _items.isNotEmpty || _workspaces.isNotEmpty;
+    if (owner != null && owner != uid && hasLocal && mounted) {
+      final c = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: Text(tr('حساب مختلف')),
+          content: Text(tr(
+              'هذا الهاتف يحتوي عناصر محفوظة من حساب آخر. ماذا تريد أن تفعل بها؟')),
+          actionsAlignment: MainAxisAlignment.center,
+          actionsOverflowDirection: VerticalDirection.down,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'merge'),
+              child: Text(tr('دمجها في هذا الحساب')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'wipe'),
+              child: Text(tr('مسحها وتحميل عناصر هذا الحساب')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: Text(tr('إلغاء وتسجيل الخروج')),
+            ),
+          ],
+        ),
+      );
+      if (c == 'cancel' || c == null) {
+        await SyncService.signOut();
+        return;
+      }
+      if (c == 'merge') {
+        // نحتفظ بالعناصر ونسجّلها لهذا الحساب؛ نمسح فقط قائمة الحذف القديمة.
+        await prefs.remove('tomb_v1');
+        await prefs.setString('owner_uid', uid);
+        await _loadItems();
+        return;
+      }
+    }
     if (owner != null && owner != uid) {
       _items.clear();
       _workspaces.clear();
@@ -1798,6 +1854,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           children: [
             _header(),
             _wsBar(),
+            if (_query.isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Brand.amber.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        L.isAr
+                            ? 'نتائج البحث: ${items.length} (القائمة مفلترة)'
+                            : 'Search results: ${items.length} (list is filtered)',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _search.clear();
+                        _query = '';
+                        _searching = false;
+                      }),
+                      child: Text(tr('مسح البحث')),
+                    ),
+                  ],
+                ),
+              ),
             AnimatedSize(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOut,
