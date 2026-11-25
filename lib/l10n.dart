@@ -54,7 +54,7 @@ const _en = <String, String>{
   'حساب مختلف': 'Different account',
   'هذا الهاتف يحتوي عناصر محفوظة من حساب آخر. ماذا تريد أن تفعل بها؟': 'This phone has items saved from another account. What do you want to do with them?',
   'دمجها في هذا الحساب': 'Merge them into this account',
-  'مسحها وتحميل عناصر هذا الحساب': 'Delete them and load this account's items',
+  'مسحها وتحميل عناصر هذا الحساب': 'Delete them and load the items of this account',
   'إلغاء وتسجيل الخروج': 'Cancel and sign out',
   'مسح البحث': 'Clear search',
   'تعذّر الحفظ': 'Could not save',
