@@ -51,6 +51,12 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'تعديل': 'Edit',
+  'تجاهل التعديلات؟': 'Discard changes?',
+  'لديك تعديلات غير محفوظة.': 'You have unsaved changes.',
+  'متابعة التحرير': 'Keep editing',
+  'أو بالبريد': 'or with email',
+  'محفوظاتك خاصة بك وتظهر بعد تسجيل الدخول': 'Your items are private and appear after you sign in',
   'مشاركة': 'Share',
   'تعذّرت المشاركة': 'Could not share',
   'احفظ كل شيء بلمسة واحدة!': 'Save anything with one touch!',

@@ -14,6 +14,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'auth_view.dart';
+import 'edit_page.dart';
 import 'help.dart';
 import 'l10n.dart';
 import 'sync.dart';
@@ -105,7 +107,7 @@ enum ItemType { text, link, image, video }
 
 class Item {
   final String id;
-  final ItemType type;
+  ItemType type;
   String content; // نص، رابط، أو اسم ملف الصورة
   final DateTime createdAt;
   DateTime updatedAt;
@@ -1012,6 +1014,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _editContent(Item it) async {
+    final r = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => EditTextPage(initial: it.content),
+      ),
+    );
+    if (r == null) return;
+    final t = r.trim();
+    if (t.isEmpty || t == it.content) return;
+    it.content = t;
+    it.type = _isLink(t) ? ItemType.link : ItemType.text;
+    it.updatedAt = DateTime.now().toUtc();
+    await _save();
+    if (mounted) setState(() {});
+    _toast(tr('تم الحفظ'));
+    _fillCaptions();
+  }
+
   Future<void> _shareItem(Item it) async {
     try {
       if (it.type == ItemType.image) {
@@ -1223,79 +1244,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool get _locked => SyncService.available && !SyncService.signedIn;
 
   Widget _lockScreen() {
-    return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Brand.tealLight, Brand.tealDeep],
-              ),
-              borderRadius:
-                  BorderRadius.vertical(bottom: Radius.circular(24)),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 6, 14),
-                child: Row(children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.asset('assets/icon/icon.png',
-                        width: 34, height: 34),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text('Keepi',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 21,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                  IconButton(
-                    color: Colors.white,
-                    tooltip: tr('اللغة'),
-                    icon: const Icon(Icons.language_rounded),
-                    onPressed: _langDialog,
-                  ),
-                ]),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.lock_outline_rounded,
-                        size: 56, color: Brand.tealMid),
-                    const SizedBox(height: 16),
-                    Text(tr('سجّل الدخول لعرض محفوظاتك'),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 19, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(
-                        tr('محفوظاتك مخفية حتى تسجّل الدخول، وتختفي بعد تسجيل الخروج.'),
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 20),
-                    FilledButton.icon(
-                      onPressed: _accountSheet,
-                      icon: const Icon(Icons.login_rounded),
-                      label: Text(tr('تسجيل الدخول')),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AuthView(
+      onLang: _langDialog,
+      onDone: () {
+        if (mounted) setState(() {});
+        _sync(manual: true);
+      },
     );
   }
 
@@ -2617,6 +2571,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   padding: EdgeInsetsDirectional.only(end: 6),
                                   child: Icon(Icons.push_pin_rounded,
                                       size: 18, color: Brand.amber),
+                                ),
+                              if (it.type != ItemType.image && kind != ItemType.video)
+                                Padding(
+                                  padding:
+                                      const EdgeInsetsDirectional.only(end: 6),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () => _editContent(it),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(Icons.edit_outlined,
+                                          size: 18,
+                                          color: cs.onSurface
+                                              .withValues(alpha: 0.55)),
+                                    ),
+                                  ),
                                 ),
                               Text(
                                 _when(it.createdAt),
