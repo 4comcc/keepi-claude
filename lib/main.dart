@@ -17,16 +17,19 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_view.dart';
 import 'edit_page.dart';
 import 'help.dart';
+import 'intro_view.dart';
 import 'l10n.dart';
 import 'sync.dart';
 
 /// يُستبدل أثناء البناء برقم البناء، لتتأكد أي نسخة مثبتة عندك.
 const kBuildLabel = 'dev';
+bool kIntroDone = true;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await L.load();
   await ThemeCtl.load();
+  kIntroDone = (await SharedPreferences.getInstance()).getBool('intro_done') ?? false;
   await SyncService.init();
   runApp(const QuickKeepApp());
 }
@@ -400,6 +403,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _sync();
       });
     }
+  }
+
+  Future<void> _finishIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_done', true);
+    if (mounted) setState(() => kIntroDone = true);
   }
 
   Future<void> _init() async {
@@ -1855,6 +1864,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIntroDone) {
+      return IntroView(
+        onFinish: _finishIntro,
+        onEnableBubble: () async {
+          await _finishIntro();
+          await _toggleBubble(true);
+        },
+      );
+    }
     if (_locked) return _lockScreen();
     final items = _visible;
     return AnnotatedRegion<SystemUiOverlayStyle>(
