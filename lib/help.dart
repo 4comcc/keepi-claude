@@ -47,8 +47,8 @@ const _secs = <_Sec>[
         Icons.bookmark_add_rounded),
   ]),
   _Sec(Icons.ios_share_rounded, 'طرق الحفظ الأخرى', 'More ways to save', [
-    _Line('من أي تطبيق: مشاركة ثم اختر Keepi (نصوص وروابط وصور وفيديو).',
-        'From any app: Share, then choose Keepi (text, links, images, video).',
+    _Line('من أي تطبيق: مشاركة ثم اختر Keepi (نصوص وروابط وصور وروابط فيديو).',
+        'From any app: Share, then choose Keepi (text, links, images, video links).',
         Icons.share_rounded),
     _Line('حدّد نصاً في أي تطبيق واختر Keepi من القائمة.',
         'Select text in any app and choose Keepi from the menu.',
@@ -70,8 +70,8 @@ const _secs = <_Sec>[
     _Line('صورة: محفوظة على هاتفك، وبالضغط تُعرض كاملة.',
         'Image: stored on your phone; tap to view it full size.',
         Icons.image_outlined),
-    _Line('فيديو: روابط يوتيوب وتيك توك وإنستجرام وفيسبوك، مع الكابشن.',
-        'Video: YouTube, TikTok, Instagram and Facebook links, with the caption.',
+    _Line('فيديو: يحفظ رابط الفيديو مع كابشنه (وليس ملف الفيديو نفسه) من يوتيوب وتيك توك وإنستجرام وفيسبوك.',
+        'Video: saves the video link with its caption (not the video file itself) from YouTube, TikTok, Instagram and Facebook.',
         Icons.play_circle_outline_rounded),
   ]),
   _Sec(Icons.touch_app_rounded, 'أيقونات البطاقة', 'Card icons', [
@@ -132,6 +132,12 @@ const _secs = <_Sec>[
 ];
 
 const _faq = <List<String>>[
+  [
+    'هل يحفظ الفيديو نفسه؟',
+    'Does it save the video itself?',
+    'لا، يحفظ رابط الفيديو وكابشنه فقط، فلا يستهلك مساحة هاتفك. وبالضغط على البطاقة يُفتح الفيديو في تطبيقه.',
+    'No. It saves the video link and its caption only, so it does not use your phone storage. Tap the card to open the video in its app.'
+  ],
   [
     'هل بياناتي آمنة؟',
     'Is my data safe?',
@@ -222,7 +228,7 @@ class HelpPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(ar ? 'مساعدة وطريقة الاستخدام' : 'Help & how to use',
+        title: Text(ar ? 'المساعدة' : 'Help',
             style: const TextStyle(fontWeight: FontWeight.w800)),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
@@ -260,8 +266,8 @@ class HelpPage extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                     ar
-                        ? 'Keepi يحفظ نصوصك وروابطك وصورك وفيديوهاتك في مكان واحد منظّم، ويتيح لك العثور عليها بسرعة، وكل ذلك بلمسة واحدة من الزر العائم.'
-                        : 'Keepi keeps your texts, links, images and videos in one organized place so you can find them fast, all with one touch of the floating button.',
+                        ? 'Keepi يحفظ نصوصك وروابطك وصورك وروابط فيديوهاتك في مكان واحد منظّم، ويتيح لك العثور عليها بسرعة، وكل ذلك بلمسة واحدة من الزر العائم.'
+                        : 'Keepi keeps your texts, links, images and video links in one organized place so you can find them fast, all with one touch of the floating button.',
                     style: const TextStyle(
                         fontSize: 14, height: 1.5, color: Colors.white)),
               ],

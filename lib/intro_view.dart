@@ -70,14 +70,15 @@ class _IntroViewState extends State<IntroView> {
       body: ar
           ? 'مكان واحد منظّم لكل ما تريد أن تتذكره، تجده بسرعة وقت الحاجة.'
           : 'One organized place for everything you want to remember, ready when you need it.',
-      extra: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      extra: Wrap(
+        alignment: WrapAlignment.center,
+        runSpacing: 12,
         children: [
           for (final e in [
             [Icons.notes_rounded, ar ? 'نصوص' : 'Texts'],
             [Icons.link_rounded, ar ? 'روابط' : 'Links'],
             [Icons.image_outlined, ar ? 'صور' : 'Images'],
-            [Icons.play_circle_outline_rounded, ar ? 'فيديو' : 'Videos'],
+            [Icons.play_circle_outline_rounded, ar ? 'روابط فيديو' : 'Video links'],
           ])
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
