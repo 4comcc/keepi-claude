@@ -1302,7 +1302,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       for (final id in tomb.where((e) => e.startsWith('w:'))) {
         final r = rw[id.substring(2)];
         if (r != null && r['deleted'] != true) {
-          upW.add({'id': r['id'], 'name': r['name'], 'updated_at': now.toIso8601String(), 'deleted': true});
+          upW.add({...r, 'updated_at': now.toIso8601String(), 'deleted': true});
         }
       }
       for (final w in List.of(_workspaces)) {
@@ -1341,8 +1341,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         final r = ri[id];
         if (r != null && r['deleted'] != true) {
           up.add({
-            'id': r['id'], 'type': r['type'], 'content': r['content'],
-            'updated_at': now.toIso8601String(), 'deleted': true,
+            ...r,
+            'updated_at': now.toIso8601String(),
+            'deleted': true,
           });
         }
       }
