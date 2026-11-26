@@ -1334,7 +1334,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       for (final id in tomb.where((e) => e.startsWith('w:'))) {
         final r = rw[id.substring(2)];
         if (r != null && r['deleted'] != true) {
-          upW.add({...r, 'updated_at': now.toIso8601String(), 'deleted': true});
+          upW.add({
+            'id': r['id'],
+            'name': r['name'],
+            'updated_at': now.toIso8601String(),
+            'deleted': true,
+          });
         }
       }
       for (final w in List.of(_workspaces)) {
@@ -1372,9 +1377,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       for (final id in tomb.where((e) => !e.startsWith('w:'))) {
         final r = ri[id];
         if (r != null && r['deleted'] != true) {
+          // نفس مفاتيح toRemote تماماً: اختلاف المفاتيح داخل الدفعة يجعل
+          // الأعمدة الناقصة NULL (فيفشل user_id الافتراضي في سياسة RLS).
           up.add({
-            ...r,
+            'id': r['id'],
+            'type': r['type'],
+            'content': r['content'],
+            'created_at': r['created_at'],
             'updated_at': now.toIso8601String(),
+            'pinned': r['pinned'] ?? false,
+            'fav': r['fav'] ?? false,
+            'ws': r['ws'],
+            'tags': r['tags'] ?? [],
             'deleted': true,
           });
         }
