@@ -1128,6 +1128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription? _authSub;
   bool _syncing = false;
   String _syncState = '';
+  String _syncErr = '';
 
   /// المحفوظات مرتبطة بحساب واحد على الجهاز: عند دخول حساب مختلف نمسح النسخة المحلية.
   Future<void> _adoptOwner() async {
@@ -1403,12 +1404,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _prefsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
       await prefs.setString(
           _wsKey, jsonEncode(_workspaces.map((e) => e.toJson()).toList()));
+      _syncErr = '';
       if (mounted) {
         setState(() => _syncState = limit ? 'بلغت الحد المجاني' : 'متزامن ✓');
       }
       if (limit) _limitDialog();
       if (manual) _toast(limit ? tr('بلغت 500 عنصر (الحد المجاني)') : tr('تمت المزامنة'));
     } catch (e) {
+      _syncErr = e.toString().replaceAll(RegExp(r'\s+'), ' ');
+      if (_syncErr.length > 260) _syncErr = _syncErr.substring(0, 260);
       if (mounted) setState(() => _syncState = 'تعذّرت المزامنة');
       if (manual) _toast(tr('تعذّرت المزامنة، تحقق من الإنترنت'));
     } finally {
@@ -1490,6 +1494,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Text(SyncService.email ?? ''),
+                    if (_syncErr.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        _syncErr,
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(fontSize: 11.5, color: Colors.red),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(L.isAr ? '${_items.where((e) => e.type != ItemType.image).length} / 500 عنصر (الخطة المجانية) · الصور تبقى على الهاتف' : '${_items.where((e) => e.type != ItemType.image).length} / 500 items (free plan) · images stay on this phone',
                         style: const TextStyle(fontSize: 12.5)),
