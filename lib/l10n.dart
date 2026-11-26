@@ -51,6 +51,11 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'الزر العائم': 'Floating button',
+  'ضغطة: حفظ الحافظة · مطوّلة: فتح Keepi': 'Tap: save clipboard · Long press: open Keepi',
+  'لقطات الشاشة': 'Screenshots',
+  'اقتراح حفظ آخر لقطة وتلوين الزر العائم': 'Suggest saving the latest screenshot and light up the button',
+  'اقتراح حفظ ما نسخته عند فتح التطبيق': 'Suggest saving what you copied when the app opens',
   'تعديل': 'Edit',
   'تجاهل التعديلات؟': 'Discard changes?',
   'لديك تعديلات غير محفوظة.': 'You have unsaved changes.',

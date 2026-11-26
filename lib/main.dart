@@ -811,10 +811,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               leading: Icon(i, size: 22, color: cs.primary),
               title: Text(t,
                   style: const TextStyle(
-                      fontSize: 15.5, fontWeight: FontWeight.w600)),
+                      fontSize: 14.5, fontWeight: FontWeight.w500)),
               subtitle: sub == null
                   ? null
-                  : Text(sub, style: TextStyle(fontSize: 12.5, color: muted)),
+                  : Text(sub, style: TextStyle(fontSize: 13, height: 1.35, color: muted)),
               trailing: Icon(Icons.arrow_forward_ios_rounded,
                   size: 14, color: muted),
               onTap: () {
@@ -832,9 +832,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               secondary: Icon(i, size: 22, color: cs.primary),
               title: Text(t,
                   style: const TextStyle(
-                      fontSize: 15.5, fontWeight: FontWeight.w600)),
+                      fontSize: 14.5, fontWeight: FontWeight.w500)),
               subtitle:
-                  Text(sub, style: TextStyle(fontSize: 12.5, color: muted)),
+                  Text(sub, style: TextStyle(fontSize: 13, height: 1.35, color: muted)),
               value: v,
               onChanged: (x) async {
                 await f(x);
@@ -851,8 +851,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     padding: const EdgeInsets.fromLTRB(4, 0, 4, 5),
                     child: Text(title,
                         style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                             color: cs.primary)),
                   ),
                   Material(
@@ -904,9 +904,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         children: [
                           Text(tr('الإعدادات'),
                               style: const TextStyle(
-                                  fontSize: 19, fontWeight: FontWeight.w800)),
+                                  fontSize: 18, fontWeight: FontWeight.w700)),
                           Text(tr('احفظ كل شيء بلمسة واحدة!'),
-                              style: TextStyle(fontSize: 12.5, color: muted)),
+                              style: TextStyle(fontSize: 13, color: muted)),
                         ],
                       ),
                     ),
@@ -930,20 +930,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       section(tr('الحفظ السريع'), [
                         toggle(
                             Icons.bubble_chart_rounded,
-                            tr('نقطة عائمة للحفظ السريع'),
-                            tr('ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi'),
+                            tr('الزر العائم'),
+                            tr('ضغطة: حفظ الحافظة · مطوّلة: فتح Keepi'),
                             _bubbleOn,
                             _toggleBubble),
                         toggle(
                             Icons.screenshot_rounded,
-                            tr('اقتراح حفظ لقطة الشاشة'),
-                            tr('تظهر لقطتك الأخيرة للحفظ، وتلوّن النقطة العائمة'),
+                            tr('لقطات الشاشة'),
+                            tr('اقتراح حفظ آخر لقطة وتلوين الزر العائم'),
                             _shotOn,
                             _toggleShot),
                         toggle(
                             Icons.lightbulb_outline_rounded,
                             tr('اقتراح الحفظ'),
-                            tr('يقترح حفظ ما نسخته عند فتح التطبيق'),
+                            tr('اقتراح حفظ ما نسخته عند فتح التطبيق'),
                             _suggest,
                             (_) => _toggleSuggest()),
                       ]),
