@@ -31,6 +31,33 @@ import kotlin.math.abs
  * نقطة عائمة فوق التطبيقات: ضغطة = حفظ الحافظة، ضغطة مطوّلة = فتح Keepi، سحب = تحريك.
  */
 class FloatingBubbleService : Service() {
+    companion object {
+        @Volatile var instance: FloatingBubbleService? = null
+    }
+
+    private var alertOn = false
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
+    /** ومضة قصيرة تؤكد نجاح الحفظ. */
+    fun flash() {
+        main.post {
+            val v = bubble ?: return@post
+            v.animate().cancel()
+            v.animate().scaleX(1.45f).scaleY(1.45f).setDuration(140).withEndAction {
+                v.animate().scaleX(1f).scaleY(1f).setDuration(240).start()
+            }.start()
+            if (!alertOn) {
+                bg?.setColor(Color.parseColor("#2BD9A0"))
+                main.postDelayed({
+                    if (!alertOn) bg?.setColor(Color.parseColor("#1E6F5C"))
+                }, 450)
+            }
+        }
+    }
     private var wm: WindowManager? = null
     private var bubble: View? = null
     private var lp: WindowManager.LayoutParams? = null
@@ -47,6 +74,7 @@ class FloatingBubbleService : Service() {
     private fun setAlert(on: Boolean) {
         val b = bg ?: return
         main.removeCallbacks(alertOff)
+        alertOn = on
         if (on) {
             b.setColor(Color.parseColor("#FFB703"))
             icon?.setColorFilter(Color.parseColor("#3B2A00"))
@@ -233,6 +261,7 @@ class FloatingBubbleService : Service() {
         }
         startActivity(
             Intent(this, ClipboardSaveActivity::class.java)
+                .putExtra("open_if_empty", true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
@@ -244,6 +273,7 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         observer?.let { contentResolver.unregisterContentObserver(it) }
         observer = null
         main.removeCallbacks(alertOff)

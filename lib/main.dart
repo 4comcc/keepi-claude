@@ -10,9 +10,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'help.dart';
 import 'l10n.dart';
 import 'sync.dart';
 
@@ -782,38 +784,120 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       showDragHandle: true,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setS) {
         final cs = Theme.of(ctx).colorScheme;
+        final dark = Theme.of(ctx).brightness == Brightness.dark;
+        final cardColor = dark
+            ? Colors.white.withValues(alpha: 0.07)
+            : cs.primary.withValues(alpha: 0.07);
+        final muted = cs.onSurface.withValues(alpha: 0.6);
+
         Widget tile(IconData i, String t, VoidCallback f, {String? sub}) =>
             ListTile(
-              leading: Icon(i, color: cs.primary),
-              title: Text(t),
-              subtitle: sub == null ? null : Text(sub),
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -1),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+              minLeadingWidth: 24,
+              horizontalTitleGap: 12,
+              leading: Icon(i, size: 22, color: cs.primary),
+              title: Text(t,
+                  style: const TextStyle(
+                      fontSize: 15.5, fontWeight: FontWeight.w600)),
+              subtitle: sub == null
+                  ? null
+                  : Text(sub, style: TextStyle(fontSize: 12.5, color: muted)),
+              trailing: Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: muted),
               onTap: () {
                 Navigator.pop(ctx);
                 f();
               },
             );
-        Widget label(String t) => Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-              child: Text(t,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface.withValues(alpha: 0.55))),
+
+        Widget toggle(IconData i, String t, String sub, bool v,
+                Future<void> Function(bool) f) =>
+            SwitchListTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -1),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+              secondary: Icon(i, size: 22, color: cs.primary),
+              title: Text(t,
+                  style: const TextStyle(
+                      fontSize: 15.5, fontWeight: FontWeight.w600)),
+              subtitle:
+                  Text(sub, style: TextStyle(fontSize: 12.5, color: muted)),
+              value: v,
+              onChanged: (x) async {
+                await f(x);
+                setS(() {});
+              },
             );
+
+        Widget section(String title, List<Widget> kids) => Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 5),
+                    child: Text(title,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: cs.primary)),
+                  ),
+                  Material(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(children: [
+                      for (var n = 0; n < kids.length; n++) ...[
+                        if (n > 0)
+                          Divider(
+                              height: 1,
+                              thickness: 0.6,
+                              indent: 50,
+                              color: cs.onSurface.withValues(alpha: 0.1)),
+                        kids[n],
+                      ],
+                    ]),
+                  ),
+                ],
+              ),
+            );
+
         return SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+                maxHeight: MediaQuery.of(ctx).size.height * 0.88),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 6, 0),
+                  padding: const EdgeInsetsDirectional.fromSTEB(18, 0, 4, 2),
                   child: Row(children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                            colors: [Brand.tealLight, Brand.tealDeep]),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Brand.amber, width: 1.6),
+                      ),
+                      child: const Icon(Icons.assignment_rounded,
+                          size: 22, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(tr('الإعدادات'),
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w800)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(tr('الإعدادات'),
+                              style: const TextStyle(
+                                  fontSize: 19, fontWeight: FontWeight.w800)),
+                          Text(tr('احفظ كل شيء بلمسة واحدة!'),
+                              style: TextStyle(fontSize: 12.5, color: muted)),
+                        ],
+                      ),
                     ),
                     IconButton(
                       tooltip: tr('إغلاق'),
@@ -822,87 +906,95 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ]),
                 ),
-                const Divider(height: 8),
                 Flexible(
                   child: ListView(
                     shrinkWrap: true,
+                    padding: const EdgeInsets.only(bottom: 14),
                     children: [
-                      label(tr('الحساب')),
-                      tile(
-                          Icons.cloud_sync_outlined,
-                          tr('الحساب والمزامنة'),
-                          _accountSheet,
-                          sub: SyncService.email),
-                      label(tr('المظهر واللغة')),
+                      section(tr('الحساب'), [
+                        tile(Icons.cloud_sync_outlined,
+                            tr('الحساب والمزامنة'), _accountSheet,
+                            sub: SyncService.email),
+                      ]),
+                      section(tr('الحفظ السريع'), [
+                        toggle(
+                            Icons.bubble_chart_rounded,
+                            tr('نقطة عائمة للحفظ السريع'),
+                            tr('ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi'),
+                            _bubbleOn,
+                            _toggleBubble),
+                        toggle(
+                            Icons.screenshot_rounded,
+                            tr('اقتراح حفظ لقطة الشاشة'),
+                            tr('تظهر لقطتك الأخيرة للحفظ، وتلوّن النقطة العائمة'),
+                            _shotOn,
+                            _toggleShot),
+                        toggle(
+                            Icons.lightbulb_outline_rounded,
+                            tr('اقتراح الحفظ'),
+                            tr('يقترح حفظ ما نسخته عند فتح التطبيق'),
+                            _suggest,
+                            (_) => _toggleSuggest()),
+                      ]),
+                      section(tr('المظهر واللغة'), [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: SegmentedButton<ThemeMode>(
+                              showSelectedIcon: false,
+                              style: const ButtonStyle(
+                                  visualDensity: VisualDensity.compact),
+                              segments: [
+                                ButtonSegment(
+                                    value: ThemeMode.system,
+                                    icon: const Icon(
+                                        Icons.brightness_auto_rounded,
+                                        size: 18),
+                                    label: Text(tr('تلقائي'))),
+                                ButtonSegment(
+                                    value: ThemeMode.light,
+                                    icon: const Icon(Icons.light_mode_rounded,
+                                        size: 18),
+                                    label: Text(tr('فاتح'))),
+                                ButtonSegment(
+                                    value: ThemeMode.dark,
+                                    icon: const Icon(Icons.dark_mode_rounded,
+                                        size: 18),
+                                    label: Text(tr('داكن'))),
+                              ],
+                              selected: {ThemeCtl.mode.value},
+                              onSelectionChanged: (v) async {
+                                await ThemeCtl.set(v.first);
+                                setS(() {});
+                              },
+                            ),
+                          ),
+                        ),
+                        tile(Icons.language_rounded, tr('اللغة'), _langDialog,
+                            sub: L.names[L.code]),
+                      ]),
+                      section(tr('البيانات'), [
+                        tile(Icons.delete_outline_rounded,
+                            tr('سلة المهملات'), _trashSheet),
+                        tile(Icons.upload_rounded,
+                            tr('نسخ احتياطي (نسخ إلى الحافظة)'),
+                            _exportBackup),
+                        tile(Icons.download_rounded,
+                            tr('استعادة من الحافظة'), _importBackup),
+                      ]),
+                      section(tr('المساعدة'), [
+                        tile(Icons.help_outline_rounded,
+                            tr('مساعدة وطريقة الاستخدام'), _helpSheet),
+                      ]),
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 6),
-                        child: SegmentedButton<ThemeMode>(
-                          showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment(
-                                value: ThemeMode.system,
-                                icon: const Icon(Icons.brightness_auto_rounded),
-                                label: Text(tr('تلقائي'))),
-                            ButtonSegment(
-                                value: ThemeMode.light,
-                                icon: const Icon(Icons.light_mode_rounded),
-                                label: Text(tr('فاتح'))),
-                            ButtonSegment(
-                                value: ThemeMode.dark,
-                                icon: const Icon(Icons.dark_mode_rounded),
-                                label: Text(tr('داكن'))),
-                          ],
-                          selected: {ThemeCtl.mode.value},
-                          onSelectionChanged: (v) async {
-                            await ThemeCtl.set(v.first);
-                            setS(() {});
-                          },
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Center(
+                          child: Text('Keepi · $kBuildLabel',
+                              style: TextStyle(fontSize: 12, color: muted)),
                         ),
                       ),
-                      tile(Icons.language_rounded, tr('اللغة'), _langDialog,
-                          sub: L.names[L.code]),
-                      label(tr('الحفظ')),
-                      SwitchListTile(
-                        secondary:
-                            Icon(Icons.lightbulb_outline_rounded, color: cs.primary),
-                        title: Text(tr('اقتراح الحفظ')),
-                        value: _suggest,
-                        onChanged: (_) async {
-                          await _toggleSuggest();
-                          setS(() {});
-                        },
-                      ),
-                      SwitchListTile(
-                        secondary: Icon(Icons.screenshot_rounded, color: cs.primary),
-                        title: Text(tr('اقتراح حفظ لقطة الشاشة')),
-                        subtitle: Text(tr('تظهر لقطتك الأخيرة للحفظ، وتلوّن النقطة العائمة')),
-                        value: _shotOn,
-                        onChanged: (v) async {
-                          await _toggleShot(v);
-                          setS(() {});
-                        },
-                      ),
-                      SwitchListTile(
-                        secondary: Icon(Icons.bubble_chart_rounded, color: cs.primary),
-                        title: Text(tr('نقطة عائمة للحفظ السريع')),
-                        subtitle: Text(tr('ضغطة: حفظ الحافظة · ضغطة مطوّلة: فتح Keepi')),
-                        value: _bubbleOn,
-                        onChanged: (v) async {
-                          await _toggleBubble(v);
-                          setS(() {});
-                        },
-                      ),
-                      tile(Icons.delete_outline_rounded, tr('سلة المهملات'),
-                          _trashSheet),
-                      label(tr('البيانات')),
-                      tile(Icons.upload_rounded, tr('نسخ احتياطي (نسخ إلى الحافظة)'),
-                          _exportBackup),
-                      tile(Icons.download_rounded, tr('استعادة من الحافظة'),
-                          _importBackup),
-                      label(tr('المساعدة')),
-                      tile(Icons.help_outline_rounded, tr('مساعدة وطريقة الاستخدام'),
-                          _helpSheet),
                     ],
                   ),
                 ),
@@ -915,81 +1007,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _helpSheet() async {
-    final items = <List<String>>[
-      ['📥', tr('الحفظ السريع'), tr('شارك أي نص أو رابط أو صورة من أي تطبيق إلى Keepi، أو حدّد النص واختر Keepi من القائمة، أو اضغط زر اللصق في الأعلى لحفظ ما نسخته.')],
-      ['➕', tr('الإضافة اليدوية'), tr('زر «إضافة» في الأسفل لكتابة نص أو إضافة صورة.')],
-      ['🎬', tr('الفيديو'), tr('روابط يوتيوب وتيك توك وإنستجرام وفيسبوك تظهر في تصنيف الفيديو. أيقونة الملاحظة تتيح كتابة الكابشن.')],
-      ['📝', tr('الملاحظات والوسوم'), tr('على كل بطاقة: نسخ، مفضلة، تثبيت، ملاحظة، وسوم، نقل لمساحة، وحذف.')],
-      ['🗂️', tr('المساحات'), tr('أنشئ مساحات (مثل عمل، دراسة) من زر المجلد، ثم انقل العناصر إليها.')],
-      ['🔍', tr('البحث'), tr('ابحث في النص والوسوم والملاحظات. اضغط على وسم لعرض كل ما يحمله.')],
-      ['🗑️', tr('سلة المهملات'), tr('المحذوفات تبقى 30 يوماً ويمكن استعادتها من الإعدادات.')],
-      ['☁️', tr('المزامنة'), tr('سجّل الدخول لمزامنة عناصرك (حتى 500 عنصر مجاناً). الصور تبقى على هاتفك.')],
-    ];
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(ctx).size.height * 0.85),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 6, 0),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(tr('مساعدة وطريقة الاستخدام'),
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w800)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ]),
-              ),
-              const Divider(height: 8),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  children: [
-                    for (final h in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(h[0], style: const TextStyle(fontSize: 22)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(h[1],
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15)),
-                                  const SizedBox(height: 2),
-                                  Text(h[2],
-                                      style: const TextStyle(
-                                          fontSize: 13.5, height: 1.5)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HelpPage()),
     );
+  }
+
+  Future<void> _shareItem(Item it) async {
+    try {
+      if (it.type == ItemType.image) {
+        await Share.shareXFiles([XFile(p.join(_imgDir.path, it.content))]);
+      } else {
+        await Share.share(it.content);
+      }
+    } catch (_) {
+      _toast(tr('تعذّرت المشاركة'));
+    }
   }
 
   Future<void> _editNote(Item it) async {
@@ -2077,9 +2109,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       _chip(tr('الكل'), Icons.apps_rounded, null),
                       _chip(tr('نصوص'), Icons.notes_rounded, ItemType.text),
                       _chip(tr('روابط'), Icons.link_rounded, ItemType.link),
+                      _chip(tr('صور'), Icons.image_outlined, ItemType.image),
                       _chip(tr('فيديو'), Icons.play_circle_outline_rounded,
                           ItemType.video),
-                      _chip(tr('صور'), Icons.image_outlined, ItemType.image),
                     ],
                   ),
                 ),
@@ -2667,10 +2699,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   () => kind == ItemType.video
                                       ? _editCaption(it)
                                       : _editNote(it)),
-                              action(Icons.sell_outlined, tr('وسوم'),
-                                  () => _editTags(it)),
-                              action(Icons.folder_open_rounded, tr('نقل'),
-                                  () => _moveItem(it)),
+                              action(Icons.share_rounded, tr('مشاركة'),
+                                  () => _shareItem(it)),
+                              PopupMenuButton<String>(
+                                tooltip: tr('المزيد'),
+                                padding: const EdgeInsets.all(8),
+                                icon: Icon(Icons.more_horiz_rounded,
+                                    size: 21,
+                                    color: cs.onSurface.withValues(alpha: 0.6)),
+                                onSelected: (v) =>
+                                    v == 'tags' ? _editTags(it) : _moveItem(it),
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'tags',
+                                    child: Row(children: [
+                                      const Icon(Icons.sell_outlined, size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(tr('وسوم')),
+                                    ]),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'move',
+                                    child: Row(children: [
+                                      const Icon(Icons.folder_open_rounded,
+                                          size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(tr('نقل')),
+                                    ]),
+                                  ),
+                                ],
+                              ),
                               action(Icons.delete_outline_rounded, tr('حذف'),
                                   () => _deleteWithUndo(it)),
                             ],

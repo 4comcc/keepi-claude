@@ -27,6 +27,14 @@ class ClipboardSaveActivity : Activity() {
             val clip = cm.primaryClip
             val text = if (isText && clip != null && clip.itemCount > 0)
                 clip.getItemAt(0).coerceToText(this)?.toString()?.trim() else null
+            if (text.isNullOrEmpty() && intent.getBooleanExtra("open_if_empty", false)) {
+                packageManager.getLaunchIntentForPackage(packageName)?.let {
+                    it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(it)
+                }
+                finish()
+                return
+            }
             val msg = when {
                 text.isNullOrEmpty() -> "الحافظة فارغة أو ليست نصاً"
                 QuickSave.save(this, text) -> "تم حفظ الحافظة في Keepi"

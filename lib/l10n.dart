@@ -51,6 +51,10 @@ String tr(String ar) {
 }
 
 const _en = <String, String>{
+  'مشاركة': 'Share',
+  'تعذّرت المشاركة': 'Could not share',
+  'احفظ كل شيء بلمسة واحدة!': 'Save anything with one touch!',
+  'يقترح حفظ ما نسخته عند فتح التطبيق': 'Suggests saving what you copied when the app opens',
   'حساب مختلف': 'Different account',
   'هذا الهاتف يحتوي عناصر محفوظة من حساب آخر. ماذا تريد أن تفعل بها؟': 'This phone has items saved from another account. What do you want to do with them?',
   'دمجها في هذا الحساب': 'Merge them into this account',

@@ -37,6 +37,7 @@ object QuickSave {
         out.put(item)
         for (i in 0 until old.length()) out.put(old.get(i))
         prefs.edit().putString("flutter.items_v1", out.toString()).commit()
+        FloatingBubbleService.instance?.flash()
         return true
     }
 
@@ -65,6 +66,7 @@ object QuickSave {
         out.put(item)
         for (i in 0 until old.length()) out.put(old.get(i))
         prefs.edit().putString("flutter.items_v1", out.toString()).commit()
+        FloatingBubbleService.instance?.flash()
         return true
     }
 }
