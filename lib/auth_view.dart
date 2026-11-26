@@ -92,47 +92,58 @@ class _AuthViewState extends State<AuthView> {
           end: Alignment.bottomCenter,
           colors: [Color(0xFF2BA58A), Color(0xFF145A4A)],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 26),
-          child: Column(
-            children: [
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: IconButton(
-                  color: Colors.white,
-                  tooltip: tr('اللغة'),
-                  icon: const Icon(Icons.language_rounded),
-                  onPressed: widget.onLang,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(19),
+                        border: Border.all(color: amber, width: 2.2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: Image.asset('assets/icon/icon.png',
+                            width: 52, height: 52),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Keepi',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            height: 1.1,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 3),
+                    Text(tr('احفظ كل شيء بلمسة واحدة!'),
+                        style: const TextStyle(
+                            color: amber,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700)),
+                  ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: amber, width: 2.5),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Image.asset('assets/icon/icon.png',
-                      width: 76, height: 76),
-                ),
+            ),
+            PositionedDirectional(
+              top: 0,
+              end: 4,
+              child: IconButton(
+                color: Colors.white,
+                tooltip: tr('اللغة'),
+                icon: const Icon(Icons.language_rounded),
+                onPressed: widget.onLang,
               ),
-              const SizedBox(height: 12),
-              const Text('Keepi',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 2),
-              Text(tr('احفظ كل شيء بلمسة واحدة!'),
-                  style: const TextStyle(
-                      color: amber, fontSize: 16, fontWeight: FontWeight.w700)),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -192,7 +203,7 @@ class _AuthViewState extends State<AuthView> {
           header,
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+              padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
