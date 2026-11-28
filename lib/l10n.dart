@@ -64,6 +64,8 @@ const _en = <String, String>{
   'محفوظاتك خاصة بك وتظهر بعد تسجيل الدخول': 'Your items are private and appear after you sign in',
   'مشاركة': 'Share',
   'تعذّرت المشاركة': 'Could not share',
+  'بحث في الإنترنت': 'Search the web',
+  'تعذّر فتح البحث': 'Could not open search',
   'احفظ كل شيء بلمسة واحدة!': 'Save anything with one touch!',
   'يقترح حفظ ما نسخته عند فتح التطبيق': 'Suggests saving what you copied when the app opens',
   'حساب مختلف': 'Different account',

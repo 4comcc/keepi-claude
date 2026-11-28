@@ -1042,6 +1042,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _fillCaptions();
   }
 
+  Future<void> _webSearch(Item it) async {
+    var q = it.content.replaceAll(Item._urlRe, ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (q.isEmpty) q = it.content.trim();
+    if (q.length > 150) q = q.substring(0, 150);
+    try {
+      await launchUrl(
+          Uri.https('www.google.com', '/search', {'q': q}),
+          mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _toast(tr('تعذّر فتح البحث'));
+    }
+  }
+
   Future<void> _shareItem(Item it) async {
     try {
       if (it.type == ItemType.image) {
@@ -2701,17 +2714,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   () => kind == ItemType.video
                                       ? _editCaption(it)
                                       : _editNote(it)),
-                              action(Icons.share_rounded, tr('مشاركة'),
-                                  () => _shareItem(it)),
+                              if (it.type != ItemType.image)
+                                action(Icons.travel_explore_rounded,
+                                    tr('بحث في الإنترنت'),
+                                    () => _webSearch(it)),
                               PopupMenuButton<String>(
                                 tooltip: tr('المزيد'),
                                 padding: const EdgeInsets.all(8),
                                 icon: Icon(Icons.more_horiz_rounded,
                                     size: 21,
                                     color: cs.onSurface.withValues(alpha: 0.6)),
-                                onSelected: (v) =>
-                                    v == 'tags' ? _editTags(it) : _moveItem(it),
+                                onSelected: (v) => v == 'tags'
+                                    ? _editTags(it)
+                                    : v == 'share'
+                                        ? _shareItem(it)
+                                        : _moveItem(it),
                                 itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'share',
+                                    child: Row(children: [
+                                      const Icon(Icons.share_rounded, size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(tr('مشاركة')),
+                                    ]),
+                                  ),
                                   PopupMenuItem(
                                     value: 'tags',
                                     child: Row(children: [
