@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'l10n.dart';
@@ -44,7 +45,9 @@ class SyncService {
     try {
       await _c.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.keepi://login-callback/',
+        redirectTo: kIsWeb
+            ? 'https://4comcc.github.io/keepi-claude/'
+            : 'io.supabase.keepi://login-callback/',
       );
       return null;
     } catch (e) {

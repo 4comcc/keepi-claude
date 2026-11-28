@@ -1,0 +1,69 @@
+name: Build Web
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate web platform folder
+        run: flutter create --org com.egyptweb --project-name quick_keep --platforms=web .
+
+      - run: flutter pub get
+
+      - name: Keepi icons, title and manifest
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          from PIL import Image
+          im = Image.open('assets/icon/icon.png').convert('RGBA')
+          for n, sz in [('web/favicon.png', 64), ('web/icons/Icon-192.png', 192), ('web/icons/Icon-512.png', 512),
+                        ('web/icons/Icon-maskable-192.png', 192), ('web/icons/Icon-maskable-512.png', 512)]:
+              im.resize((sz, sz), Image.LANCZOS).save(n)
+          PY
+          sed -i 's|<title>.*</title>|<title>Keepi - احفظ كل شيء بلمسة واحدة</title>|' web/index.html
+          sed -i 's|content="A new Flutter project."|content="Keepi - احفظ كل شيء بلمسة واحدة"|' web/index.html
+          sed -i 's|"name": "quick_keep"|"name": "Keepi"|; s|"short_name": "quick_keep"|"short_name": "Keepi"|; s|"theme_color": "#[0-9A-Fa-f]*"|"theme_color": "#1E6F5C"|; s|"background_color": "#[0-9A-Fa-f]*"|"background_color": "#1E6F5C"|' web/manifest.json
+
+      - name: Stamp build number
+        run: sed -i "s/const kBuildLabel = 'dev';/const kBuildLabel = 'web${{ github.run_number }}';/" lib/main.dart
+
+      - name: Build web
+        run: flutter build web --release --base-href /keepi-claude/
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

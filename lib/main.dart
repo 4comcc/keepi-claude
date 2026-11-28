@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -29,7 +30,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await L.load();
   await ThemeCtl.load();
-  kIntroDone = (await SharedPreferences.getInstance()).getBool('intro_done') ?? false;
+  kIntroDone = kIsWeb ||
+      ((await SharedPreferences.getInstance()).getBool('intro_done') ?? false);
   await SyncService.init();
   runApp(const QuickKeepApp());
 }
@@ -412,9 +414,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _init() async {
-    final docs = await getApplicationDocumentsDirectory();
-    _imgDir = Directory(p.join(docs.path, 'images'));
-    await _imgDir.create(recursive: true);
+    if (!kIsWeb) {
+      final docs = await getApplicationDocumentsDirectory();
+      _imgDir = Directory(p.join(docs.path, 'images'));
+      await _imgDir.create(recursive: true);
+    }
     final prefs = await SharedPreferences.getInstance();
     _suggest = prefs.getBool(_suggestKey) ?? true;
     _lastClip = prefs.getString(_lastClipKey);
@@ -426,7 +430,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _fillCaptions();
     _checkClipboard();
 
-    // استقبال المشاركة من التطبيقات الأخرى
+    // استقبال المشاركة من التطبيقات الأخرى (أندرويد فقط)
+    if (kIsWeb) return;
     final initial = await ReceiveSharingIntent.instance.getInitialMedia();
     if (initial.isNotEmpty) {
       await _handleShared(initial);
@@ -489,7 +494,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// عند فتح التطبيق: إن وُجد نص جديد في الحافظة لم يُحفظ، نقترح حفظه.
   Future<void> _checkClipboard() async {
-    if (!_suggest || !_ready || !mounted) return;
+    if (kIsWeb || !_suggest || !_ready || !mounted) return;
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty || text == _lastClip) return;
@@ -635,7 +640,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _trashFile(Map<String, dynamic> m) async {
-    if (m['type'] != 'image') return;
+    if (kIsWeb || m['type'] != 'image') return;
     final f = File(p.join(_imgDir.path, m['content'] as String));
     if (await f.exists()) await f.delete();
   }
@@ -927,19 +932,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             tr('الحساب والمزامنة'), _accountSheet,
                             sub: SyncService.email),
                       ]),
+                      if (!kIsWeb)
                       section(tr('الحفظ السريع'), [
+                        if (!kIsWeb)
                         toggle(
                             Icons.bubble_chart_rounded,
                             tr('الزر العائم'),
                             tr('ضغطة: حفظ الحافظة · مطوّلة: فتح Keepi'),
                             _bubbleOn,
                             _toggleBubble),
+                        if (!kIsWeb)
                         toggle(
                             Icons.screenshot_rounded,
                             tr('لقطات الشاشة'),
                             tr('اقتراح حفظ آخر لقطة وتلوين الزر العائم'),
                             _shotOn,
                             _toggleShot),
+                        if (!kIsWeb)
                         toggle(
                             Icons.lightbulb_outline_rounded,
                             tr('اقتراح الحفظ'),
@@ -1861,7 +1870,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             extendBodyBehindAppBar: true,
             body: Center(
               child: InteractiveViewer(
-                child: Image.file(File(p.join(_imgDir.path, it.content))),
+                child: kIsWeb
+                    ? const Icon(Icons.image_not_supported_outlined,
+                        color: Colors.white54, size: 64)
+                    : Image.file(File(p.join(_imgDir.path, it.content))),
               ),
             ),
           ),
@@ -2398,12 +2410,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case ItemType.image:
         body = ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Image.file(
-            File(p.join(_imgDir.path, it.content)),
-            height: 180,
-            width: double.infinity,
-            fit: BoxFit.cover,
-          ),
+          child: kIsWeb
+              ? Container(
+                  height: 120,
+                  width: double.infinity,
+                  color: cs.onSurface.withValues(alpha: 0.06),
+                  child: Icon(Icons.image_outlined,
+                      size: 40, color: cs.onSurface.withValues(alpha: 0.4)),
+                )
+              : Image.file(
+                  File(p.join(_imgDir.path, it.content)),
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
         );
       case ItemType.video:
         final cap = it.caption;
@@ -2812,12 +2832,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       Brand.tealLight, _pasteAndSave),
                   _addTile(ctx, Icons.edit_note_rounded, tr('كتابة'),
                       Brand.tealMid, _showAddText),
-                  _addTile(ctx, Icons.photo_library_outlined, tr('معرض'),
-                      const Color(0xFFE09A00),
-                      () => _pickImage(ImageSource.gallery)),
-                  _addTile(ctx, Icons.photo_camera_outlined, tr('كاميرا'),
-                      const Color(0xFF3C8DAD),
-                      () => _pickImage(ImageSource.camera)),
+                  if (!kIsWeb) ...[
+                    _addTile(ctx, Icons.photo_library_outlined, tr('معرض'),
+                        const Color(0xFFE09A00),
+                        () => _pickImage(ImageSource.gallery)),
+                    _addTile(ctx, Icons.photo_camera_outlined, tr('كاميرا'),
+                        const Color(0xFF3C8DAD),
+                        () => _pickImage(ImageSource.camera)),
+                  ],
                 ],
               ),
             ],
