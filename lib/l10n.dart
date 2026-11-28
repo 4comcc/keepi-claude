@@ -174,6 +174,7 @@ const _en = <String, String>{
   'ابحث في محفوظاتك...': 'Search your items...',
   'نصوص': 'Texts',
   'فيديو': 'Videos',
+  'رابط فيديو': 'Video link',
   'تعديل الكابشن': 'Edit caption',
   'سلة المهملات': 'Trash',
   'إفراغ السلة': 'Empty trash',

@@ -2363,7 +2363,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case ItemType.image:
         return tr('صورة');
       case ItemType.video:
-        return tr('فيديو');
+        return tr('رابط فيديو');
       case ItemType.text:
         return tr('نص');
     }
